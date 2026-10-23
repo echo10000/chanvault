@@ -1,3 +1,11 @@
+## ChanVault v0.5.4 — Yotsuba appearance and offline swipe feed
+
+- **Yotsuba-inspired theme by default:** leafy green, cozy cream, soft borders, and a new original four-leaf-clover + play launcher icon. The icon is an original motif, not character art.
+- **Change it anytime:** Discover → Appearance → **Theme** to select Yotsuba Clover Night, Yotsuba Cream, Midnight Classic, or Sakura Dusk. **Accent** offers a default or clover green, sunflower gold, lavender, or sky blue. Preferences stay on the device. The video surface stays dark to protect viewing contrast.
+- **Offline swipe viewer:** Saved Media → **Swipe through all saved media**, or tap a file in a By Thread, By Board or Recent group. Swipe vertically through files from that group, with no network needed. Videos loop, have a tap-to-show timeline and ±10 second buttons, and use local-file playback. Images and GIFs can be viewed offline.
+- **Photo layout:** Thread images use Fit by default to show the full picture, with a deliberate Fill toggle when cropping is preferred; Original opens outside the app.
+- **Safe updates:** Install the official signed release over an earlier official signed release to preserve your private saved videos. Uninstalling the app deletes app-private vault contents; the optional Export ZIP exists as an independent backup.
+
 ## ChanVault v0.5.3 — touch playback scrubbing
 
 - Tap a playing video to reveal a **seekable timeline**, elapsed/total time and **-10 sec / Play-Pause / +10 sec** controls.
