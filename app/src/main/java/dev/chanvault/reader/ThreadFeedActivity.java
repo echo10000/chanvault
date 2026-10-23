@@ -51,7 +51,11 @@ public final class ThreadFeedActivity extends Activity {
     private boolean mediaOnly = true, batchRunning = false;
     private int position = 0, viewSerial = 0;
     private float touchStartX, touchStartY;
-    private FrameLayout root, mediaPane;
+    private LinearLayout root;
+    private FrameLayout mediaPane;
+    private android.widget.HorizontalScrollView nextScroller;
+    private TextView nextToggle;
+    private boolean nextExpanded = false;
     private TextView counter, heading, caption, prompt, status;
     private Button saveButton, modeButton, batchButton;
     private VideoView video;
@@ -150,80 +154,102 @@ public final class ThreadFeedActivity extends Activity {
     }
 
     private void makeScreen() {
-        root = new FrameLayout(this);
+        // The video and bottom controls occupy separate regions. Nothing overlays the player.
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        mediaPane = new FrameLayout(this);
-        root.addView(mediaPane, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(12), dp(6), dp(12), dp(7));
-        top.setBackgroundColor(0xe610141e);
-        top.addView(button("Back", this::finish),
-                new LinearLayout.LayoutParams(dp(78), dp(44)));
+        top.setPadding(dp(10), dp(5), dp(10), dp(5));
+        top.setBackgroundColor(0xff161c29);
+        top.addView(button("Back", this::finish), new LinearLayout.LayoutParams(dp(76), dp(42)));
         LinearLayout titleStack = new LinearLayout(this);
         titleStack.setOrientation(LinearLayout.VERTICAL);
-        titleStack.setPadding(dp(10), 0, dp(3), 0);
-        titleStack.addView(text("/" + board + "/  •  Thread #" + threadId, 14, FG));
-        counter = text("Loading thread...", 12, SUB);
+        titleStack.setPadding(dp(9), 0, dp(4), 0);
+        TextView name = text("/" + board + "/  •  Thread #" + threadId, 13, FG);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titleStack.addView(name);
+        counter = text("Loading thread...", 11, SUB);
         titleStack.addView(counter);
         top.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
         modeButton = button("All posts", this::toggleMode);
-        top.addView(modeButton, new LinearLayout.LayoutParams(dp(94), dp(44)));
-        root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
+        top.addView(modeButton, new LinearLayout.LayoutParams(dp(88), dp(42)));
+        root.addView(top, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        mediaPane = new FrameLayout(this);
+        root.addView(mediaPane, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
-        bottom.setPadding(dp(14), dp(9), dp(14), dp(10));
-        bottom.setBackground(rounded(0xf3121825, 20, 0));
+        bottom.setPadding(dp(12), dp(7), dp(12), dp(10));
+        bottom.setBackground(rounded(0xff171d2a, 17, 0));
 
-        LinearLayout nextHead = new LinearLayout(this);
-        nextHead.setGravity(Gravity.CENTER_VERTICAL);
-        TextView nextLabel = text("UP NEXT", 11, PRIMARY);
-        nextLabel.setTypeface(null, android.graphics.Typeface.BOLD);
-        nextHead.addView(nextLabel, new LinearLayout.LayoutParams(0, -2, 1));
-        nextHead.addView(text("Tap to jump", 11, SUB));
-        bottom.addView(nextHead);
-        android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(this);
-        scroller.setHorizontalScrollBarEnabled(false);
+        // A collapsed Up Next bar is shown by default; expanding the filmstrip
+        // makes the player a little shorter instead of covering its pixels.
+        nextToggle = text("Up next   •   Tap to preview 3 items     ▾", 12, PRIMARY);
+        nextToggle.setTypeface(null, android.graphics.Typeface.BOLD);
+        nextToggle.setGravity(Gravity.CENTER_VERTICAL);
+        nextToggle.setPadding(dp(9), dp(5), dp(9), dp(5));
+        nextToggle.setBackground(rounded(0xff292f43, 10, 0));
+        nextToggle.setOnClickListener(v -> setNextExpanded(!nextExpanded));
+        bottom.addView(nextToggle, new LinearLayout.LayoutParams(-1, dp(34)));
+
+        nextScroller = new android.widget.HorizontalScrollView(this);
+        nextScroller.setHorizontalScrollBarEnabled(false);
         upNextRow = new LinearLayout(this);
         upNextRow.setOrientation(LinearLayout.HORIZONTAL);
-        upNextRow.setPadding(0, dp(7), 0, dp(7));
-        scroller.addView(upNextRow);
-        bottom.addView(scroller, new LinearLayout.LayoutParams(-1, dp(95)));
+        upNextRow.setPadding(0, dp(5), 0, dp(4));
+        nextScroller.addView(upNextRow);
+        nextScroller.setVisibility(View.GONE);
+        LinearLayout.LayoutParams nextLp = new LinearLayout.LayoutParams(-1, dp(90));
+        nextLp.topMargin = dp(3);
+        bottom.addView(nextScroller, nextLp);
 
-        heading = text("Loading thread media...", 17, FG);
+        heading = text("Loading media...", 15, FG);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
-        heading.setMaxLines(2);
-        bottom.addView(heading);
-        caption = text("Swipe vertically to browse. Tap to pause.", 12, SUB);
-        caption.setMaxLines(2);
-        caption.setPadding(0, dp(5), 0, dp(8));
+        heading.setMaxLines(1);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams headingLp = new LinearLayout.LayoutParams(-1, -2);
+        headingLp.topMargin = dp(7);
+        bottom.addView(heading, headingLp);
+
+        caption = text("Swipe vertically to browse", 11, SUB);
+        caption.setMaxLines(1);
+        caption.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        caption.setPadding(0, dp(2), 0, dp(7));
         bottom.addView(caption);
 
         LinearLayout actions = new LinearLayout(this);
         saveButton = button("Save to vault", this::saveCurrent);
-        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(48), 1);
-        saveLp.rightMargin = dp(9);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        saveLp.rightMargin = dp(8);
         actions.addView(saveButton, saveLp);
-        actions.addView(button("Posts", this::openPosts),
-                new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.addView(button("Posts", this::openPosts), new LinearLayout.LayoutParams(0, dp(43), 1));
         bottom.addView(actions);
 
         batchButton = button("Download thread", this::confirmBatch);
-        LinearLayout.LayoutParams batchLp = new LinearLayout.LayoutParams(-1, dp(42));
-        batchLp.topMargin = dp(7);
+        LinearLayout.LayoutParams batchLp = new LinearLayout.LayoutParams(-1, dp(39));
+        batchLp.topMargin = dp(6);
         bottom.addView(batchButton, batchLp);
 
-        status = text("Previews stream online • Nothing saves without your tap", 11, SUB);
+        status = text("Swipe to browse • Tap video to pause", 10, SUB);
         status.setGravity(Gravity.CENTER_HORIZONTAL);
-        status.setPadding(0, dp(6), 0, 0);
+        status.setMaxLines(1);
+        status.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        status.setPadding(0, dp(5), 0, 0);
         bottom.addView(status);
 
-        FrameLayout.LayoutParams bottomLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        bottomLp.setMargins(dp(6), 0, dp(6), dp(5));
-        root.addView(bottom, bottomLp);
+        root.addView(bottom, new LinearLayout.LayoutParams(-1, -2));
         setContentView(root);
+    }
+
+    private void setNextExpanded(boolean expand) {
+        nextExpanded = expand;
+        nextScroller.setVisibility(expand ? View.VISIBLE : View.GONE);
+        nextToggle.setText(expand ? "Up next   •   Hide previews     ▴"
+                : "Up next   •   Tap to preview 3 items     ▾");
     }
 
     private void populateUpNext() {
@@ -280,6 +306,7 @@ public final class ThreadFeedActivity extends Activity {
         android.widget.LinearLayout indicator = new android.widget.LinearLayout(this);
         indicator.setOrientation(android.widget.LinearLayout.VERTICAL);
         indicator.setGravity(Gravity.CENTER);
+        indicator.setPadding(dp(10),dp(10),dp(10),dp(10));
         android.widget.ProgressBar spinner = new android.widget.ProgressBar(this);
         spinner.setIndeterminate(true);
         spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
@@ -287,8 +314,9 @@ public final class ThreadFeedActivity extends Activity {
         TextView labelView = text(label, 13, FG);
         labelView.setPadding(dp(12), dp(12), dp(12), dp(4));
         labelView.setGravity(Gravity.CENTER);
+        labelView.setMaxWidth(dp(260));
         indicator.addView(labelView);
-        FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER);
+        FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(dp(280), -2, Gravity.CENTER);
         overlay.addView(indicator, center);
         overlay.setOnTouchListener(swipe);
         mediaPane.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
@@ -458,7 +486,7 @@ public final class ThreadFeedActivity extends Activity {
             video = player;
             mediaPane.addView(player, new FrameLayout.LayoutParams(-1, -1));
             player.setOnTouchListener(swipe);
-            FrameLayout loading = loadingOverlay("Loading video preview...", swipe);
+            FrameLayout loading = loadingOverlay("Buffering video...", swipe);
             player.setOnPreparedListener(mp -> {
                 if (serial != viewSerial) return;
                 mp.setLooping(true);
@@ -480,7 +508,7 @@ public final class ThreadFeedActivity extends Activity {
             image.setBackgroundColor(BG);
             image.setOnTouchListener(swipe);
             mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
-            FrameLayout loading = loadingOverlay("Loading image preview...", swipe);
+            FrameLayout loading = loadingOverlay("Loading image...", swipe);
             MediaThumbs.load(image, current.url, true, ok -> {
                 if (serial != viewSerial) return;
                 if (ok) dismissLoading(loading, serial);
