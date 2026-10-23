@@ -127,7 +127,8 @@ final class BoardsHome {
         });
         LinearLayout.LayoutParams goLp = new LinearLayout.LayoutParams(dp(88), dp(44));
         search.addView(go, goLp);
-        addSpace(search, 16);
+        parent.addView(search, new LinearLayout.LayoutParams(-1, -2));
+        addSpace(new View(activity), 16);
 
         LinearLayout favoritesHeader = row();
         favoritesHeader.setGravity(Gravity.CENTER_VERTICAL);
