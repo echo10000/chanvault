@@ -23,6 +23,14 @@ An independent, unofficial **Android imageboard reader with a private offline me
 
 Download [`app-release.apk`](https://github.com/echo10000/chanvault/releases/download/v0.5.0/app-release.apk) directly from GitHub Releases. This is the permanent **ChanVault** app, not the separate experimental Preview build. Android requires confirmation to install. Previous experimental `dev.chanvault.reader` debug builds have an incompatible certificate, so uninstall the old app **only after** checking for private media you need to preserve. Future releases signed with the same key should update in place.
 
+## ChanVault v0.5.1 — playback and media navigation
+
+- **Fit / Fill / Rotate**: normal video playback preserves aspect ratio; Fill crops rather than stretching, and Rotate can correct footage encoded sideways.
+- **No controls over video:** player controls, including Open Original, are below the video frame.
+- **Whole-thread media carousel:** expand Browse all media to see every attachment thumbnail, scroll horizontally, and tap to jump. Thumbnails load near the viewport rather than all at once.
+- **Progress and sizes:** MP4/WebM show file size (from thread metadata), percent of playable timeline buffered, and percent of file bytes held in the playback cache. Images show transfer percentage when content length is known.
+- **Less rebuffering:** a bounded 96 MiB, evicting video cache survives media swipes; previously loaded portions can be reused when going backwards.
+- **Gentle look-ahead:** when enabled, ChanVault fetches at most the first 1 MiB of the next video. This is not a full offline download, and it may consume mobile data. Disable with **Preload off** underneath the video.
 ## ChanVault v0.5
 
 - A collapsible **Up Next** thumbnail tray sits **below**, never over, the playing video.
