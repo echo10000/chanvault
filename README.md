@@ -4,12 +4,15 @@ An independent, unofficial **Android imageboard reader with a private offline me
 
 ## Features
 
-- Browse 4chan board catalogs and individual threads (read-only JSON API).
+- Browse 4chan catalogs in touch-friendly thumbnail cards (read-only JSON API).
+- Swipe up and down through a thread's media in a Shorts-style feed, or switch to all posts.
+- Stream WebM/MP4 previews **before** deciding whether to save; fallback to the original in a browser when your device lacks the codec.
+- Batch-download supported attachments from a thread with confirmation, progress, duplicate skipping, and cancellation between files.
 - Save WebM, MP4, GIF, JPG and PNG media directly into Android **app-private** storage.
 - Open the **Saved Media** tab for offline playback and deletion, with no files added to Gallery/Photos.
 - No storage permission, account, telemetry, or cloud backup. Downloads are limited to 250 MB each.
 
-**Experimental MVP:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI is intentionally minimal; bookmarks, posting, thumbnail grids and broad WebM codec support are future work.
+**Experimental v0.2:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
 
 ## Phone-only APK build
 
