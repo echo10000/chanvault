@@ -62,12 +62,14 @@ public final class DownloadService extends Service {
     }
 
     public static JSONObject item(String url, String title, String board, long threadId) throws Exception {
-        if (url == null || !url.matches(
-                "https://i\\.4cdn\\.org/[a-z0-9]{1,12}/[0-9]{5,24]\\.(webm|mp4|gif|jpg|jpeg|png)")) {
+        if (!MediaAddress.isValidMediaUrl(url)) {
             throw new Exception("Invalid media URL");
         }
-        if (board == null || !board.matches("[a-z0-9]{1,12}") || threadId <= 0)
+        if (!MediaAddress.isValidBoard(board) || threadId <= 0)
             throw new Exception("Invalid thread");
+        // Reject URLs where the actual CDN board differs from requested metadata.
+        if (!new java.net.URI(url).getRawPath().startsWith("/" + board + "/"))
+            throw new Exception("Media board mismatch");
         JSONObject row = new JSONObject();
         row.put("url", url);
         row.put("title", title == null ? "Saved media" : title.substring(0, Math.min(title.length(), 120)));
