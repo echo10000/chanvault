@@ -235,6 +235,8 @@ public final class MainActivity extends Activity {
 
     private void home() {
         shell("Discover", "home");
+        body.addView(button("Check for signed updates", () -> UpdateChecker.check(this)));
+        spacing(9);
         android.content.SharedPreferences resumePrefs = getSharedPreferences("watch_resume_v1", MODE_PRIVATE);
         String lastBoard = resumePrefs.getString("latest_board", "");
         long lastThread = resumePrefs.getLong("latest_thread", 0);
@@ -387,6 +389,12 @@ public final class MainActivity extends Activity {
                         toast("Stopping after current download");
                     }), new LinearLayout.LayoutParams(0, dp(44), 1));
                     body.addView(actions);
+                    LinearLayout backups = new LinearLayout(this);
+                    backups.addView(button("Export vault ZIP", this::exportVault),
+                            new LinearLayout.LayoutParams(0, dp(44), 1));
+                    backups.addView(button("Restore ZIP", this::importVault),
+                            new LinearLayout.LayoutParams(0, dp(44), 1));
+                    body.addView(backups);
                     spacing(10);
                     LinearLayout gallery = new LinearLayout(this);
                     gallery.setOrientation(LinearLayout.VERTICAL);
@@ -395,6 +403,42 @@ public final class MainActivity extends Activity {
                 });
             } catch (Exception e) { error(ticket, "Saved media error: " + e.getMessage()); }
         });
+    }
+
+    private void exportVault() {
+        Intent pick = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.setType("application/zip");
+        pick.putExtra(Intent.EXTRA_TITLE, "ChanVault-vault-backup.zip");
+        startActivityForResult(pick, 201);
+    }
+
+    private void importVault() {
+        new AlertDialog.Builder(this)
+                .setTitle("Restore private vault?")
+                .setMessage("Restoring is supported into an EMPTY vault. Existing private files "
+                        + "will not be overwritten. Select a ZIP previously exported by ChanVault.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Choose backup", (d,w) -> {
+                    Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    pick.addCategory(Intent.CATEGORY_OPENABLE);
+                    pick.setType("application/zip");
+                    startActivityForResult(pick, 202);
+                }).show();
+    }
+
+    @Override @SuppressWarnings("deprecation")
+    protected void onActivityResult(int requestCode, int resultCode, Intent result) {
+        super.onActivityResult(requestCode, resultCode, result);
+        if (resultCode != RESULT_OK || result == null || result.getData() == null) return;
+        Uri uri = result.getData();
+        if (requestCode == 201) {
+            toast("Preparing the private vault ZIP backup...");
+            VaultBackup.exportTo(this, uri, this::saved);
+        } else if (requestCode == 202) {
+            toast("Restoring private vault from ZIP...");
+            VaultBackup.importFrom(this, uri, this::saved);
+        }
     }
 
     private void toast(String message) {
