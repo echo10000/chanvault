@@ -68,7 +68,9 @@ public final class SavedFeedActivity extends Activity {
     private Button playButton, fitButton;
     private ExoPlayer player;
     private PlayerView playerView;
+    private ImageView activeImage;
     private AnimatedImageDrawable animated;
+    private boolean resumeAfterStop = false;
     private ProgressBar loading;
     private File vaultDir;
     private int index = 0, rotation = 0, serial = 0;
@@ -187,6 +189,8 @@ public final class SavedFeedActivity extends Activity {
             zoom = !zoom;
             if (playerView != null) playerView.setResizeMode(zoom ?
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM : AspectRatioFrameLayout.RESIZE_MODE_FIT);
+            if (activeImage != null) activeImage.setScaleType(zoom ?
+                    ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER);
             fitButton.setText(zoom ? "Fill / Fit" : "Fit / Fill");
         });
         LinearLayout.LayoutParams fitLp = new LinearLayout.LayoutParams(0, dp(44), 1);
@@ -213,12 +217,14 @@ public final class SavedFeedActivity extends Activity {
         playButton = null;
         rotation = 0;
         zoom = false;
+        resumeAfterStop = false;
         if (player != null) {
             if (playerView != null) playerView.setPlayer(null);
             player.release();
             player = null;
         }
         playerView = null;
+        activeImage = null;
         if (animated != null) {
             animated.stop();
             animated = null;
@@ -325,8 +331,23 @@ public final class SavedFeedActivity extends Activity {
         addControls(holder);
     }
 
+    private android.graphics.Bitmap decodeStillFile(File file) {
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), opts);
+        int maxDimension = Math.max(1200, Math.max(
+                getResources().getDisplayMetrics().widthPixels,
+                getResources().getDisplayMetrics().heightPixels) * 2);
+        opts.inSampleSize = 1;
+        while (opts.outWidth / opts.inSampleSize > maxDimension ||
+                opts.outHeight / opts.inSampleSize > maxDimension) opts.inSampleSize *= 2;
+        opts.inJustDecodeBounds = false;
+        return BitmapFactory.decodeFile(file.getAbsolutePath(), opts);
+    }
+
     private void showLocalImage(File file) {
         ImageView image = new ImageView(this);
+        activeImage = image;
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
         image.setBackgroundColor(BG);
         mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
@@ -340,10 +361,10 @@ public final class SavedFeedActivity extends Activity {
                     animated.start();
                 }
             } catch (Exception ex) {
-                image.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
+                image.setImageBitmap(decodeStillFile(file));
             }
         } else {
-            image.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
+            image.setImageBitmap(decodeStillFile(file));
         }
     }
 
@@ -439,6 +460,7 @@ public final class SavedFeedActivity extends Activity {
     }
 
     private void applyRotation() {
+        if (activeImage != null) activeImage.setRotation(rotation);
         if (playerView != null) {
             View surface = playerView.getVideoSurfaceView();
             if (surface instanceof TextureView) {
@@ -463,8 +485,17 @@ public final class SavedFeedActivity extends Activity {
     }
 
     @Override protected void onStop() {
+        resumeAfterStop = player != null && player.isPlaying();
         if (player != null) player.pause();
         super.onStop();
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        if (player != null && resumeAfterStop) {
+            player.play();
+            resumeAfterStop = false;
+        }
     }
 
     @Override protected void onDestroy() {
