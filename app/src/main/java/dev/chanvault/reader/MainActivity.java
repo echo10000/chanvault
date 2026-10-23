@@ -6,6 +6,9 @@ import android.content.Intent;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Html;
@@ -66,7 +69,8 @@ public final class MainActivity extends Activity {
                 board = openBoard;
                 thread(openBoard, openThread);
             } else home();
-        } else home();
+        } else if (getIntent().getBooleanExtra("openSaved", false)) saved();
+        else home();
     }
 
     @Override protected void onDestroy() {
@@ -231,7 +235,15 @@ public final class MainActivity extends Activity {
 
     private void home() {
         shell("Discover", "home");
-        final int visibleGeneration = generation;
+        android.content.SharedPreferences resumePrefs = getSharedPreferences("watch_resume_v1", MODE_PRIVATE);
+        String lastBoard = resumePrefs.getString("latest_board", "");
+        long lastThread = resumePrefs.getLong("latest_thread", 0);
+        long lastPost = resumePrefs.getLong("latest_post", 0);
+        if (lastBoard.matches("[a-z0-9]{1,12}") && lastThread > 0) {
+            card("Continue watching", "Return to /" + lastBoard + "/  ·  thread #" + lastThread,
+                    () -> openFeed(lastBoard, lastThread, lastPost));
+        }
+                final int visibleGeneration = generation;
         BoardsHome home = new BoardsHome(this, body, new BoardsHome.Navigator() {
             @Override public void board(String requestedBoard) { catalog(requestedBoard); }
             @Override public void thread(String requestedBoard, long threadId) {
@@ -324,50 +336,64 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void askNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 51);
+    }
+
     private void download(String url, String name, String sourceBoard, long sourceThread) {
-        toast("Saving to private vault…");
-        worker.execute(() -> {
-            try {
-                vault.download(url, name, sourceBoard, sourceThread);
-                ui.post(() -> toast("Saved — open Saved Media to play offline."));
-            } catch (Exception e) { ui.post(() -> toast("Download failed: " + e.getMessage())); }
-        });
+        askNotifications();
+        try {
+            JSONArray list = new JSONArray();
+            list.put(DownloadService.item(url, name, sourceBoard, sourceThread));
+            DownloadService.enqueue(this, list);
+            toast("Download queued in the background");
+        } catch (Exception ex) {
+            toast("Couldn't queue: " + ex.getMessage());
+        }
     }
 
     private void saved() {
         shell("Saved Media", "saved");
         int ticket = generation;
-        body.addView(label("Opening vault…", 14, MUTED));
+        TextView queue = label(DownloadService.progress(this), 13, MUTED);
+        queue.setPadding(dp(14), dp(12), dp(14), dp(12));
+        android.graphics.drawable.GradientDrawable queueBg = new android.graphics.drawable.GradientDrawable();
+        queueBg.setColor(0xff252c3e);
+        queueBg.setCornerRadius(dp(13));
+        queue.setBackground(queueBg);
+        body.addView(queue);
+        body.addView(button("Refresh downloads", this::saved));
+        body.addView(button("Stop queued downloads", () -> {
+            DownloadService.cancel(this);
+            toast("Stop requested. Current file may finish before the queue stops.");
+        }));
+        body.addView(label("Loading saved media…", 14, MUTED));
         worker.execute(() -> {
             try {
                 List<JSONObject> items = vault.list();
                 ui.post(() -> {
                     if (ticket != generation) return;
                     body.removeAllViews();
-                    if (items.isEmpty()) card("Nothing saved yet", "Browse a board and save an attachment first.", null);
-                    for (JSONObject item : items) {
-                        String id = item.optString("id");
-                        String file = item.optString("file");
-                        String title = item.optString("title", "Saved media");
-                        card(title, "/" + item.optString("board") + "/ · " + (item.optLong("size") / 1024) + " KB", null);
-                        body.addView(button("Play offline", () -> {
-                            Intent intent = new Intent(this, Player.class);
-                            intent.putExtra("file", file);
-                            startActivity(intent);
-                        }));
-                        body.addView(button("Delete saved file", () -> {
-                            new AlertDialog.Builder(this).setTitle("Delete from private vault?")
-                                    .setMessage(title)
-                                    .setNegativeButton("Cancel", null)
-                                    .setPositiveButton("Delete", (d, w) -> worker.execute(() -> {
-                                        try { vault.delete(id); ui.post(this::saved); }
-                                        catch (Exception e) { ui.post(() -> toast(e.getMessage())); }
-                                    })).show();
-                        }));
-                        spacing(12);
-                    }
+                    TextView progress = label(DownloadService.progress(this), 12, MUTED);
+                    progress.setPadding(dp(12), dp(12), dp(12), dp(12));
+                    progress.setBackgroundColor(0xff252c3e);
+                    body.addView(progress);
+                    LinearLayout actions = new LinearLayout(this);
+                    actions.addView(button("Refresh", this::saved), new LinearLayout.LayoutParams(0, dp(44), 1));
+                    actions.addView(button("Stop downloads", () -> {
+                        DownloadService.cancel(this);
+                        toast("Stopping after current download");
+                    }), new LinearLayout.LayoutParams(0, dp(44), 1));
+                    body.addView(actions);
+                    spacing(10);
+                    LinearLayout gallery = new LinearLayout(this);
+                    gallery.setOrientation(LinearLayout.VERTICAL);
+                    body.addView(gallery);
+                    new SavedLibrary(this, gallery, items, this::saved).draw();
                 });
-            } catch (Exception e) { error(ticket, "Vault error: " + e.getMessage()); }
+            } catch (Exception e) { error(ticket, "Saved media error: " + e.getMessage()); }
         });
     }
 
@@ -560,8 +586,20 @@ public final class MainActivity extends Activity {
                 });
             } else {
                 ImageView image = new ImageView(this);
-                image.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
                 image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                if (name.endsWith(".gif") && Build.VERSION.SDK_INT >= 28) {
+                    try {
+                        android.graphics.ImageDecoder.Source source =
+                                android.graphics.ImageDecoder.createSource(file);
+                        android.graphics.drawable.Drawable drawable =
+                                android.graphics.ImageDecoder.decodeDrawable(source);
+                        image.setImageDrawable(drawable);
+                        if (drawable instanceof android.graphics.drawable.AnimatedImageDrawable)
+                            ((android.graphics.drawable.AnimatedImageDrawable) drawable).start();
+                    } catch (Exception ex) {
+                        image.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
+                    }
+                } else image.setImageBitmap(BitmapFactory.decodeFile(file.getAbsolutePath()));
                 root.addView(image, new LinearLayout.LayoutParams(-1, 0, 1));
             }
             setContentView(root);
