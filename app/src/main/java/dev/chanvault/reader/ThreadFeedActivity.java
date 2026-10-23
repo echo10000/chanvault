@@ -633,7 +633,14 @@ public final class ThreadFeedActivity extends Activity {
             MediaThumbs.load(image, current.url, true, ok -> {
                 if (serial != viewSerial) return;
                 if (ok) dismissLoading(loading, serial);
-                else showLoadingFailure(loading, "Image preview is unavailable.\nTry again or open the original.", serial);
+                else showLoadingFailure(loading, "Image preview is unavailable.\nTry again or use Original below.", serial);
+            }, percent -> {
+                if (serial != viewSerial) return;
+                if (bufferingLabel != null && loading.getParent() != null) {
+                    bufferingLabel.setText("Loading image " + percent + "%\n"
+                            + formatSize(current.size) + " total");
+                }
+                status.setText("Image loaded " + percent + "% · File " + formatSize(current.size));
             });
             if (".gif".equals(current.ext))
                 status.setText("GIF previews may show one frame on some devices.");
