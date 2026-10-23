@@ -55,6 +55,7 @@ public final class ThreadFeedActivity extends Activity {
     private ThreadShelf threadShelf;
     private String board;
     private long threadId;
+    private String threadTitle = "Untitled thread";
     private boolean mediaOnly = true, batchRunning = false;
     private int position = 0, viewSerial = 0;
     private float touchStartX, touchStartY;
@@ -511,6 +512,9 @@ public final class ThreadFeedActivity extends Activity {
         io.execute(() -> {
             try {
                 JSONArray posts = new JSONObject(fetchText(url)).getJSONArray("posts");
+                JSONObject op = posts.optJSONObject(0);
+                if (op != null) threadTitle = ThreadTitles.select(
+                        clean(op.optString("sub", "")), clean(op.optString("com", "")), threadId);
                 for (int i = 0; i < posts.length(); i++) {
                     JSONObject post = posts.optJSONObject(i);
                     if (post == null) continue;
@@ -904,7 +908,8 @@ public final class ThreadFeedActivity extends Activity {
         askNotificationPermission();
         try {
             JSONArray batch = new JSONArray();
-            batch.put(DownloadService.item(current.url, current.title + current.ext, board, threadId));
+            batch.put(DownloadService.item(current.url, current.title + current.ext,
+                    board, threadId, threadTitle));
             DownloadService.enqueue(this, batch);
             status.setText("Download queued • See your notification");
             toast("Download added to the background queue");
@@ -948,7 +953,8 @@ public final class ThreadFeedActivity extends Activity {
         try {
             JSONArray batch = new JSONArray();
             for (Entry e : media) if (e.hasMedia()) {
-                batch.put(DownloadService.item(e.url, e.title + e.ext, board, threadId));
+                batch.put(DownloadService.item(e.url, e.title + e.ext,
+                        board, threadId, threadTitle));
             }
             DownloadService.enqueue(this, batch);
             status.setText("Queued " + batch.length() + " files • You can leave the app");
