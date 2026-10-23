@@ -1,0 +1,3 @@
+v0.5.3 signed release request.
+Features: pin and block threads locally with review/unblock manager, full-thread catalog and Discover filtering, seek bar with playback clock and 10-second skip controls.
+Use the permanently pinned signing certificate and verify APK signature before publishing.
