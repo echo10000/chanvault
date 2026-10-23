@@ -53,6 +53,8 @@ public final class MainActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private LinearLayout body;
+    private LinearLayout catalogPins, catalogRegular;
+    private TextView catalogPinnedHeader;
     private Vault vault;
     private ThreadShelf threadShelf;
     private long shownShelfRevision;
@@ -182,16 +184,16 @@ public final class MainActivity extends Activity {
         tile.setPadding(dp(11), dp(11), dp(11), dp(11));
         android.graphics.drawable.GradientDrawable bg =
                 new android.graphics.drawable.GradientDrawable();
-        bg.setColor(0xff1d222e);
+        bg.setColor(theme.card);
         bg.setCornerRadius(dp(17));
-        bg.setStroke(dp(1), 0xff303749);
+        bg.setStroke(dp(1), theme.border);
         tile.setBackground(bg);
         tile.setClickable(true);
         tile.setOnClickListener(v -> openFeed(b, id, 0));
 
         ImageView thumbnail = new ImageView(this);
         thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        thumbnail.setBackgroundColor(0xff333b4b);
+        thumbnail.setBackgroundColor(theme.chip);
         LinearLayout.LayoutParams thumbLp = new LinearLayout.LayoutParams(dp(106), dp(114));
         thumbLp.rightMargin = dp(14);
         tile.addView(thumbnail, thumbLp);
@@ -216,18 +218,20 @@ public final class MainActivity extends Activity {
         quick.setOrientation(LinearLayout.HORIZONTAL);
         TextView pin = label(threadShelf.isPinned(b, id) ? "Unpin" : "Pin", 13, ACCENT);
         pin.setPadding(dp(8), dp(6), dp(8), dp(6));
-        pin.setBackgroundColor(0xff2a3041);
+        pin.setBackgroundColor(theme.chip);
         pin.setClickable(true);
         pin.setOnClickListener(v -> {
             if (threadShelf.isPinned(b, id)) {
                 threadShelf.unpin(b, id);
                 pin.setText("Pin");
-                toast("Thread unpinned");
+                moveCatalogCard(tile, false);
+                toast("Thread unpinned from /" + b + "/");
             } else if (threadShelf.pin(b, id, title,
-                    obj.optString("tim", "").matches("[0-9]{5,24}")
-                        ? "https://i.4cdn.org/" + b + "/" + obj.optString("tim") + "s.jpg" : "")) {
+                    tim.matches("[0-9]{5,24}")
+                        ? "https://i.4cdn.org/" + b + "/" + tim + "s.jpg" : "")) {
                 pin.setText("Unpin");
-                toast("Thread pinned to Discover");
+                moveCatalogCard(tile, true);
+                toast("Thread pinned in /" + b + "/");
             }
         });
         quick.addView(pin);
@@ -243,7 +247,11 @@ public final class MainActivity extends Activity {
                     String thumb = tim.matches("[0-9]{5,24}")
                             ? "https://i.4cdn.org/" + b + "/" + tim + "s.jpg" : "";
                     threadShelf.block(b, id, title, thumb);
-                    body.removeView(tile);
+                    if (tile.getParent() instanceof android.view.ViewGroup)
+                        ((android.view.ViewGroup) tile.getParent()).removeView(tile);
+                    if (catalogPinnedHeader != null && catalogPins != null)
+                        catalogPinnedHeader.setVisibility(
+                                catalogPins.getChildCount() > 0 ? View.VISIBLE : View.GONE);
                     toast("Thread blocked locally");
                 }).show());
         quick.addView(hide);
@@ -252,7 +260,59 @@ public final class MainActivity extends Activity {
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(10);
-        body.addView(tile, lp);
+        LinearLayout destination = threadShelf.isPinned(b, id) ? catalogPins : catalogRegular;
+        if (destination != null) destination.addView(tile, lp);
+        else body.addView(tile, lp);
+    }
+
+    private void moveCatalogCard(View tile, boolean pin) {
+        if (catalogPins == null || catalogRegular == null) return;
+        if (tile.getParent() instanceof android.view.ViewGroup)
+            ((android.view.ViewGroup) tile.getParent()).removeView(tile);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(10);
+        (pin ? catalogPins : catalogRegular).addView(tile, 0, lp);
+        if (catalogPinnedHeader != null) catalogPinnedHeader.setVisibility(
+                catalogPins.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void showPinnedOutsideCatalog(ThreadShelf.Item item) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        android.graphics.drawable.GradientDrawable bg =
+                new android.graphics.drawable.GradientDrawable();
+        bg.setColor(theme.card);
+        bg.setCornerRadius(dp(13));
+        bg.setStroke(dp(1), theme.border);
+        row.setBackground(bg);
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        TextView name = label("✿  " + item.title, 15, TEXT);
+        name.setMaxLines(2);
+        textCol.addView(name);
+        textCol.addView(label("Thread #" + item.id + " · Not in current board catalog", 11, MUTED));
+        LinearLayout buttons = new LinearLayout(this);
+        TextView open = label("Open", 13, ACCENT);
+        open.setPadding(dp(6), dp(6), dp(12), dp(6));
+        open.setOnClickListener(v -> openFeed(item.board, item.id, 0));
+        buttons.addView(open);
+        TextView unpin = label("Unpin", 13, MUTED);
+        unpin.setPadding(dp(10), dp(6), dp(10), dp(6));
+        unpin.setOnClickListener(v -> {
+            threadShelf.unpin(item.board, item.id);
+            if (row.getParent() instanceof android.view.ViewGroup)
+                ((android.view.ViewGroup) row.getParent()).removeView(row);
+            catalogPinnedHeader.setVisibility(catalogPins.getChildCount() > 0 ?
+                    View.VISIBLE : View.GONE);
+            toast("Unpinned from /" + item.board + "/");
+        });
+        buttons.addView(unpin);
+        textCol.addView(buttons);
+        row.addView(textCol, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(10);
+        catalogPins.addView(row, lp);
     }
 
     private void openFeed(String b, long id, long focusPost) {
@@ -309,7 +369,10 @@ public final class MainActivity extends Activity {
         spacing(10);
         body.addView(button("Check for signed updates", () -> UpdateChecker.check(this)));
         spacing(12);
-        showPinnedThreads();
+        // Pins are deliberately shown only inside their own board catalog.
+        body.addView(button("Manage blocked threads (" +
+                threadShelf.blocked().size() + ")", this::showBlockedThreads));
+        spacing(14);
         android.content.SharedPreferences resumePrefs = getSharedPreferences("watch_resume_v1", MODE_PRIVATE);
         String lastBoard = resumePrefs.getString("latest_board", "");
         long lastThread = resumePrefs.getLong("latest_thread", 0);
@@ -450,8 +513,21 @@ public final class MainActivity extends Activity {
         catch (Exception e) { toast(e.getMessage()); return; }
         shell("/" + board + "/ catalog", "catalog");
         int ticket = generation;
-        body.addView(label("Loading threads and thumbnails…", 14, MUTED));
-        String b = board;
+        final String b = board;
+        catalogPinnedHeader = label("✿  Pinned in /" + b + "/", 19, ACCENT);
+        catalogPinnedHeader.setPadding(dp(3), dp(8), dp(3), dp(8));
+        catalogPinnedHeader.setVisibility(View.GONE);
+        body.addView(catalogPinnedHeader);
+        catalogPins = new LinearLayout(this);
+        catalogPins.setOrientation(LinearLayout.VERTICAL);
+        body.addView(catalogPins);
+        TextView regularHeading = label("Threads in /" + b + "/", 17, TEXT);
+        regularHeading.setPadding(dp(3), dp(8), dp(3), dp(8));
+        body.addView(regularHeading);
+        catalogRegular = new LinearLayout(this);
+        catalogRegular.setOrientation(LinearLayout.VERTICAL);
+        body.addView(catalogRegular);
+        catalogRegular.addView(label("Loading threads and thumbnails…", 14, MUTED));
         worker.execute(() -> {
             try {
                 JSONArray pages = new JSONArray(fetch("https://a.4cdn.org/" + b + "/catalog.json"));
@@ -462,14 +538,31 @@ public final class MainActivity extends Activity {
                 }
                 ui.post(() -> {
                     if (generation != ticket) return;
-                    body.removeAllViews();
-                    body.addView(label("Tap any thread to browse its media vertically.", 14, MUTED));
-                    spacing(9);
+                    catalogPins.removeAllViews();
+                    catalogRegular.removeAllViews();
+                    List<ThreadShelf.Item> pins = new ArrayList<>();
+                    for (ThreadShelf.Item pin : threadShelf.pinned())
+                        if (b.equals(pin.board) && !threadShelf.isBlocked(b, pin.id)) pins.add(pin);
+                    java.util.Map<Long, JSONObject> live = new java.util.HashMap<>();
+                    for (JSONObject obj : threads) live.put(obj.optLong("no"), obj);
+                    for (ThreadShelf.Item pin : pins) {
+                        JSONObject obj = live.get(pin.id);
+                        if (obj == null) showPinnedOutsideCatalog(pin);
+                        else {
+                            String title = clean(obj.optString("sub", ""));
+                            if (title.isEmpty()) title = pin.title;
+                            String preview = clean(obj.optString("com", ""));
+                            if (preview.length() > 180) preview = preview.substring(0, 180) + "…";
+                            catalogCard(obj, b, pin.id, title, preview);
+                        }
+                    }
+                    catalogPinnedHeader.setVisibility(
+                            catalogPins.getChildCount() > 0 ? View.VISIBLE : View.GONE);
                     int shown = 0;
                     for (JSONObject obj : threads) {
                         if (shown >= 100) break;
                         long id = obj.optLong("no");
-                        if (threadShelf.isBlocked(b, id)) continue;
+                        if (threadShelf.isBlocked(b, id) || threadShelf.isPinned(b, id)) continue;
                         shown++;
                         String title = clean(obj.optString("sub", ""));
                         if (title.isEmpty()) title = "Thread #" + id;
@@ -477,10 +570,18 @@ public final class MainActivity extends Activity {
                         if (preview.length() > 180) preview = preview.substring(0, 180) + "…";
                         catalogCard(obj, b, id, title, preview);
                     }
-                    if (shown == 0) body.addView(label("No visible threads. You can review blocked threads from Discover.", 13, MUTED));
-                    if (shown < threads.size()) body.addView(label("Showing up to 100 visible threads.", 13, MUTED));
+                    if (shown == 0) catalogRegular.addView(label("No other visible threads.", 13, MUTED));
+                    if (shown < threads.size()) catalogRegular.addView(
+                            label("Showing up to 100 non-pinned threads.", 12, MUTED));
                 });
-            } catch (Exception e) { error(ticket, "Board error: " + e.getMessage()); }
+            } catch (Exception e) {
+                ui.post(() -> {
+                    if (generation != ticket) return;
+                    catalogRegular.removeAllViews();
+                    catalogRegular.addView(label("Board load failed: " + e.getMessage(), 13, MUTED));
+                    catalogRegular.addView(button("Retry catalog", () -> catalog(b)));
+                });
+            }
         });
     }
 
