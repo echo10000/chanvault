@@ -17,8 +17,30 @@ An independent, unofficial **Android imageboard reader with a private offline me
 - Open the **Saved Media** tab for offline playback and deletion, with no files added to Gallery/Photos.
 - No storage permission, account, telemetry, or cloud backup. Downloads are limited to 250 MB each.
 
-**Experimental v0.4:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
+**Experimental v0.5:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
 
+## ChanVault v0.5
+
+- A collapsible **Up Next** thumbnail tray sits **below**, never over, the playing video.
+- Swipe position and thread mode are remembered so you can resume a session.
+- Downloads use an Android `dataSync` **foreground service**. Single media and whole-thread queues continue after leaving the screen, with a persistent notification and Stop action. Android, lost connectivity, and battery management may still interrupt transfers.
+- The offline vault has **By thread**, **By board**, and **Recent** views, playable tiles, and long-press deletion.
+- Saved Media shows background download status, with Refresh and Stop controls.
+- **Export vault ZIP** and **Restore ZIP** use Android's system picker. ZIPs are explicit exports outside private storage, so protect them and remove unwanted copies. Restore requires an empty vault.
+- Home provides a one-tap **Check for signed updates** control via GitHub Releases.
+
+## Permanent signed releases (one-time setup)
+
+The workflow is in `.github/workflows/release-apk.yml`, but **cannot publish until private signing secrets are configured**.
+
+Create or securely generate a PKCS#12 keystore with alias `chanvault`. Back up that keystore and its password **outside this public repository**. In GitHub Settings -> Secrets and variables -> Actions, configure:
+
+- `CHANVAULT_KEYSTORE_B64` — full base64 of the private keystore file.
+- `CHANVAULT_SIGNING_PASSWORD` — matching keystore and key password.
+
+Then Actions -> **Publish signed ChanVault APK** -> Run workflow, entering a version tag such as `v0.5.0`. The workflow verifies the signature and publishes the APK to GitHub Releases. Future signed versions MUST use the same private key for in-place updates.
+
+**Critical existing-install warning:** Earlier debug APKs are signed using temporary GitHub runner keys. A permanently signed release cannot update them in place, and uninstalling erases their app-private vault. Version 0.4 did not include ZIP export. **Do not uninstall an existing debug APK while it holds files you need.** The old debuggable app's private files may be recoverable through USB debugging from a trusted computer, or you can re-download the originals after migration. The ZIP backup feature helps preserve data from v0.5 onward, but only once you have installed v0.5.
 ## Phone-only APK build
 
 1. Go to **Actions → Build Android APK** in this GitHub repository.
