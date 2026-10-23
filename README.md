@@ -5,6 +5,8 @@ An independent, unofficial **Android imageboard reader with a private offline me
 ## Features
 
 - Browse 4chan catalogs in touch-friendly thumbnail cards (read-only JSON API).
+- Discover active, non-pinned threads directly from the Quick Boards home screen, with preview thumbnails and reply counts.
+- Heart boards to add them to persistent on-device Favorites; recently visited boards can appear in Discover.
 - Swipe up and down through a thread's media in a Shorts-style feed, or switch to all posts.
 - Stream WebM/MP4 previews **before** deciding whether to save; fallback to the original in a browser when your device lacks the codec.
 - Batch-download supported attachments from a thread with confirmation, progress, duplicate skipping, and cancellation between files.
@@ -12,7 +14,7 @@ An independent, unofficial **Android imageboard reader with a private offline me
 - Open the **Saved Media** tab for offline playback and deletion, with no files added to Gallery/Photos.
 - No storage permission, account, telemetry, or cloud backup. Downloads are limited to 250 MB each.
 
-**Experimental v0.2:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
+**Experimental v0.3:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
 
 ## Phone-only APK build
 
