@@ -1,3 +1,11 @@
+## ChanVault v0.5.2 — fixed downloads and spacing
+
+- Fixed an Android regex interval crash that prevented **Save to vault** and **Download thread** from starting. Source URLs now use strict scheme, host, board, filename, and file-type validation without regex quantifier ranges.
+- Added CI smoke tests for normal CDN links and rejected unsafe links. Both debug and signed release builds run these tests.
+- Reworked player tools into two rows with balanced tap targets and 12dp horizontal button spacing, keeping them outside the video area.
+- Increased spacing and padding for **Save to vault / Posts**, **Download thread**, and the fixed **Browse / Saved Media** navigation bar.
+- Adjusted Saved Media's Refresh/Stop and Export/Restore action rows so the buttons don't touch.
+
 # ChanVault
 
 An independent, unofficial **Android imageboard reader with a private offline media vault**. MIT-licensed and open to community contributions.
