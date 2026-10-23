@@ -826,6 +826,38 @@ public final class MainActivity extends Activity {
             persist(updated);
         }
 
+        /**
+         * Remove selected saved items in one index transaction.
+         * Persist the new index before deleting private files, so failed
+         * persistence cannot silently discard the user’s library.
+         */
+        synchronized int deleteMany(java.util.Set<String> selectedIds) throws Exception {
+            if (selectedIds == null || selectedIds.isEmpty()) return 0;
+            JSONArray old = load(), updated = new JSONArray();
+            java.util.ArrayList<File> removedFiles = new java.util.ArrayList<>();
+            int removed = 0;
+            for (int i = 0; i < old.length(); i++) {
+                JSONObject item = old.getJSONObject(i);
+                if (!selectedIds.contains(item.optString("id"))) {
+                    updated.put(item);
+                    continue;
+                }
+                String name = item.optString("file", "");
+                if (!name.matches("[a-f0-9-]{36}\\.(webm|mp4|gif|jpg|jpeg|png)")) {
+                    updated.put(item);
+                    continue;
+                }
+                removedFiles.add(new File(directory, name));
+                removed++;
+            }
+            if (removed == 0) return 0;
+            persist(updated);
+            for (File mediaFile : removedFiles) {
+                if (mediaFile.isFile()) mediaFile.delete();
+            }
+            return removed;
+        }
+
         void download(String source, String title, String board, long threadId) throws Exception {
             download(source, title, board, threadId, "");
         }
