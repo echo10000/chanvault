@@ -20,6 +20,11 @@ final class MediaThumbs {
     };
 
     static void load(ImageView view, String url, boolean full) {
+        load(view, url, full, null);
+    }
+
+    static void load(ImageView view, String url, boolean full,
+                     java.util.function.Consumer<Boolean> completed) {
         view.setTag(url);
         view.setImageDrawable(null);
         if (url == null || !url.matches(
@@ -29,6 +34,7 @@ final class MediaThumbs {
         Bitmap cached = bitmaps.get(url);
         if (cached != null) {
             view.setImageBitmap(cached);
+            if (completed != null) completed.accept(true);
             return;
         }
         pool.execute(() -> {
@@ -70,7 +76,9 @@ final class MediaThumbs {
                 if (connection != null) connection.disconnect();
                 final Bitmap result = loaded;
                 view.post(() -> {
-                    if (url.equals(view.getTag()) && result != null) view.setImageBitmap(result);
+                    if (!url.equals(view.getTag())) return;
+                    if (result != null) view.setImageBitmap(result);
+                    if (completed != null) completed.accept(result != null);
                 });
             }
         });
