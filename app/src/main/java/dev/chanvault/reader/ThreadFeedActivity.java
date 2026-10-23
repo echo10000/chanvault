@@ -200,7 +200,7 @@ public final class ThreadFeedActivity extends Activity {
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
-        bottom.setPadding(dp(12), dp(7), dp(12), dp(10));
+        bottom.setPadding(dp(15), dp(9), dp(15), dp(12));
         bottom.setBackground(rounded(0xff171d2a, 17, 0));
 
         // A collapsed Up Next bar is shown by default; expanding the filmstrip
@@ -208,10 +208,10 @@ public final class ThreadFeedActivity extends Activity {
         nextToggle = text("Browse all media    ▾", 12, PRIMARY);
         nextToggle.setTypeface(null, android.graphics.Typeface.BOLD);
         nextToggle.setGravity(Gravity.CENTER_VERTICAL);
-        nextToggle.setPadding(dp(9), dp(5), dp(9), dp(5));
+        nextToggle.setPadding(dp(14), dp(6), dp(12), dp(6));
         nextToggle.setBackground(rounded(0xff292f43, 10, 0));
         nextToggle.setOnClickListener(v -> setNextExpanded(!nextExpanded));
-        bottom.addView(nextToggle, new LinearLayout.LayoutParams(-1, dp(34)));
+        bottom.addView(nextToggle, new LinearLayout.LayoutParams(-1, dp(39)));
 
         nextScroller = new android.widget.HorizontalScrollView(this);
         nextScroller.setHorizontalScrollBarEnabled(false);
@@ -225,39 +225,62 @@ public final class ThreadFeedActivity extends Activity {
         nextLp.topMargin = dp(3);
         bottom.addView(nextScroller, nextLp);
 
+        // Two spacious rows are easier to hit than four edge-to-edge small buttons.
+        // All controls remain beneath the player and outside its picture area.
         videoTools = new LinearLayout(this);
-        videoTools.setOrientation(LinearLayout.HORIZONTAL);
+        videoTools.setOrientation(LinearLayout.VERTICAL);
         videoTools.setVisibility(View.GONE);
-        fitButton = button("Fit", () -> {
+        LinearLayout videoRow1 = new LinearLayout(this);
+        videoRow1.setOrientation(LinearLayout.HORIZONTAL);
+        fitButton = button("Fit / Fill", () -> {
             if (feedPlayer == null) return;
-            fitButton.setText(feedPlayer.toggleFill() ? "Fill" : "Fit");
+            boolean filled = feedPlayer.toggleFill();
+            fitButton.setText(filled ? "Fill / Fit" : "Fit / Fill");
+            status.setText(filled ? "Zoomed to fill (edges may crop)" : "Fit entire video");
         });
-        videoTools.addView(fitButton, new LinearLayout.LayoutParams(0, dp(37), 1));
-        Button rotate = button("Rotate", () -> {
+        LinearLayout.LayoutParams fitLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        fitLp.rightMargin = dp(6);
+        videoRow1.addView(fitButton, fitLp);
+        Button rotate = button("Rotate 90°", () -> {
             if (feedPlayer != null) {
                 int degrees = feedPlayer.rotate90();
-                status.setText("Rotated " + degrees + " degrees");
+                status.setText("Rotation " + degrees + "°");
             }
         });
-        videoTools.addView(rotate, new LinearLayout.LayoutParams(0, dp(37), 1));
-        Button original = button("Original", () -> {
+        LinearLayout.LayoutParams rotateLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        rotateLp.leftMargin = dp(6);
+        videoRow1.addView(rotate, rotateLp);
+        videoTools.addView(videoRow1, new LinearLayout.LayoutParams(-1, dp(43)));
+
+        LinearLayout videoRow2 = new LinearLayout(this);
+        videoRow2.setOrientation(LinearLayout.HORIZONTAL);
+        Button original = button("Open original", () -> {
             Entry e = currentEntry();
             if (e == null || e.url == null) return;
             try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(e.url))); }
             catch (Exception ex) { toast("No external player installed"); }
         });
-        videoTools.addView(original, new LinearLayout.LayoutParams(0, dp(37), 1));
-        preloadButton = button(preloadEnabled ? "Preload on" : "Preload off", () -> {
+        LinearLayout.LayoutParams originalLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        originalLp.rightMargin = dp(6);
+        videoRow2.addView(original, originalLp);
+        preloadButton = button(preloadEnabled ? "Preload: On" : "Preload: Off", () -> {
             preloadEnabled = !preloadEnabled;
             getSharedPreferences("feed_settings", MODE_PRIVATE).edit()
                     .putBoolean("prefetch_next", preloadEnabled).apply();
-            preloadButton.setText(preloadEnabled ? "Preload on" : "Preload off");
+            preloadButton.setText(preloadEnabled ? "Preload: On" : "Preload: Off");
             if (!preloadEnabled) streamCache.cancelPrefetch();
             else prepareNextVideo();
         });
-        videoTools.addView(preloadButton, new LinearLayout.LayoutParams(0, dp(37), 1));
-        LinearLayout.LayoutParams toolsLp = new LinearLayout.LayoutParams(-1, dp(37));
-        toolsLp.topMargin = dp(4);
+        LinearLayout.LayoutParams preloadLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        preloadLp.leftMargin = dp(6);
+        videoRow2.addView(preloadButton, preloadLp);
+        LinearLayout.LayoutParams row2Lp = new LinearLayout.LayoutParams(-1, dp(43));
+        row2Lp.topMargin = dp(7);
+        videoTools.addView(videoRow2, row2Lp);
+
+        LinearLayout.LayoutParams toolsLp = new LinearLayout.LayoutParams(-1, -2);
+        toolsLp.topMargin = dp(8);
+        toolsLp.bottomMargin = dp(5);
         bottom.addView(videoTools, toolsLp);
 
         heading = text("Loading media...", 15, FG);
@@ -276,15 +299,17 @@ public final class ThreadFeedActivity extends Activity {
 
         LinearLayout actions = new LinearLayout(this);
         saveButton = button("Save to vault", this::saveCurrent);
-        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(43), 1);
-        saveLp.rightMargin = dp(8);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(48), 1);
+        saveLp.rightMargin = dp(7);
         actions.addView(saveButton, saveLp);
-        actions.addView(button("Posts", this::openPosts), new LinearLayout.LayoutParams(0, dp(43), 1));
+        LinearLayout.LayoutParams postsLp = new LinearLayout.LayoutParams(0, dp(48), 1);
+        postsLp.leftMargin = dp(7);
+        actions.addView(button("Posts", this::openPosts), postsLp);
         bottom.addView(actions);
 
         batchButton = button("Download thread", this::confirmBatch);
-        LinearLayout.LayoutParams batchLp = new LinearLayout.LayoutParams(-1, dp(39));
-        batchLp.topMargin = dp(6);
+        LinearLayout.LayoutParams batchLp = new LinearLayout.LayoutParams(-1, dp(47));
+        batchLp.topMargin = dp(10);
         bottom.addView(batchButton, batchLp);
 
         status = text("Swipe to browse • Tap video to pause", 10, SUB);
@@ -563,7 +588,7 @@ public final class ThreadFeedActivity extends Activity {
         saveButton.setEnabled(current.hasMedia());
         saveButton.setText(current.hasMedia() ? "Save to vault" : "Text only");
         videoTools.setVisibility(current.isVideo() ? View.VISIBLE : View.GONE);
-        fitButton.setText("Fit");
+        fitButton.setText("Fit / Fill");
         status.setText(current.hasMedia()
                 ? "Size: " + formatSize(current.size) + " · Swipe to browse"
                 : "Text-only post · Swipe up for the next post");
