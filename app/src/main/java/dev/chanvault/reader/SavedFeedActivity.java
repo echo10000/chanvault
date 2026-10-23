@@ -51,15 +51,6 @@ public final class SavedFeedActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final ArrayList<JSONObject> media = new ArrayList<>();
-    private final Runnable hideControls = () -> {
-        if (controls != null && !scrubbing) controls.setVisibility(View.GONE);
-    };
-    private final Runnable tick = new Runnable() {
-        @Override public void run() {
-            updateTimeline();
-            ui.postDelayed(this, 400);
-        }
-    };
     private LinearLayout root;
     private FrameLayout mediaPane;
     private TextView count, title, details, timelineText;
@@ -76,6 +67,15 @@ public final class SavedFeedActivity extends Activity {
     private int index = 0, rotation = 0, serial = 0;
     private boolean scrubbing = false, zoom = false;
     private float downX, downY;
+    private final Runnable hideControls = () -> {
+        if (controls != null && !scrubbing) controls.setVisibility(View.GONE);
+    };
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            updateTimeline();
+            ui.postDelayed(this, 400);
+        }
+    };
 
     private int dp(int px) { return Math.round(getResources().getDisplayMetrics().density * px); }
 
