@@ -43,7 +43,7 @@ An independent, unofficial **Android imageboard reader with a private offline me
 
 ## Install the official signed APK
 
-Download [`app-release.apk`](https://github.com/echo10000/chanvault/releases/download/v0.5.1/app-release.apk) directly from GitHub Releases. This is the permanent **ChanVault** app, not the separate experimental Preview build. Android requires confirmation to install. Previous experimental `dev.chanvault.reader` debug builds have an incompatible certificate, so uninstall the old app **only after** checking for private media you need to preserve. Future releases signed with the same key should update in place.
+Download [`app-release.apk`](https://github.com/echo10000/chanvault/releases/latest) directly from GitHub Releases. This is the permanent **ChanVault** app, not the separate experimental Preview build. Android requires confirmation to install. Previous experimental `dev.chanvault.reader` debug builds have an incompatible certificate, so uninstall the old app **only after** checking for private media you need to preserve. Future releases signed with the same key should update in place.
 
 ## ChanVault v0.5.1 — playback and media navigation
 
@@ -65,7 +65,7 @@ Download [`app-release.apk`](https://github.com/echo10000/chanvault/releases/dow
 
 ## Permanent signed releases
 
-Permanent signed releases are published at **[GitHub Releases](https://github.com/echo10000/chanvault/releases/latest)**. v0.5.1 is the current signed release. The key remains outside this public repository in GitHub Actions secrets. Future signed releases must reuse exactly the same key.
+Permanent signed releases are published at **[GitHub Releases](https://github.com/echo10000/chanvault/releases/latest)**. v0.5.3 is the current signed release. The key remains outside this public repository in GitHub Actions secrets. Future signed releases must reuse exactly the same key.
 
 Create or securely generate a PKCS#12 keystore with alias `chanvault`. Back up that keystore and its password **outside this public repository**. In GitHub Settings -> Secrets and variables -> Actions, configure:
 
