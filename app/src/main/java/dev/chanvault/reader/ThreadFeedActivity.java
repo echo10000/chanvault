@@ -368,6 +368,32 @@ public final class ThreadFeedActivity extends Activity {
         showEntry();
     }
 
+    private void dismissLoading(FrameLayout loading, int serial) {
+        if (serial != viewSerial || loading == null) return;
+        loading.animate().alpha(0f).setDuration(170).withEndAction(() -> {
+            if (serial == viewSerial) mediaPane.removeView(loading);
+        }).start();
+    }
+
+    private void showLoadingFailure(FrameLayout overlay, String message, int serial) {
+        if (serial != viewSerial) return;
+        overlay.animate().cancel();
+        overlay.setAlpha(1f);
+        overlay.removeAllViews();
+        LinearLayout content = new LinearLayout(this);
+        content.setGravity(Gravity.CENTER);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(15), dp(20), dp(15));
+        TextView label = text(message, 14, FG);
+        label.setGravity(Gravity.CENTER);
+        content.addView(label);
+        Button retry = button("Retry preview", this::showEntry);
+        LinearLayout.LayoutParams retryLp = new LinearLayout.LayoutParams(dp(160), dp(46));
+        retryLp.topMargin = dp(14);
+        content.addView(retry, retryLp);
+        overlay.addView(content, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
+    }
+
     private void showEntry() {
         ++viewSerial;
         if (video != null) {
@@ -381,20 +407,23 @@ public final class ThreadFeedActivity extends Activity {
             caption.setText("Switch to All posts to read the discussion.");
             counter.setText("0 items");
             saveButton.setEnabled(false);
+            upNextRow.removeAllViews();
             return;
         }
         position = Math.max(0, Math.min(position, list.size() - 1));
+        populateUpNext();
+        final int serial = viewSerial;
         final Entry current = list.get(position);
         counter.setText((mediaOnly ? "Media " : "Post ") + (position + 1) + " / " + list.size()
-                + "  ·  " + media.size() + " attachments");
+                + "  •  " + media.size() + " attachments");
         heading.setText(current.title);
         caption.setText("#" + current.id + " · " + current.author + "\n"
-                + (current.text.isEmpty() ? "No description" : shorten(current.text, 380)));
+                + (current.text.isEmpty() ? "No description" : shorten(current.text, 120)));
         saveButton.setEnabled(current.hasMedia());
-        saveButton.setText(current.hasMedia() ? "↓ Save privately" : "No attachment");
+        saveButton.setText(current.hasMedia() ? "Save to vault" : "Text only");
         status.setText(current.hasMedia()
-                ? "Swipe up/down to browse · Tap a video to pause/play"
-                : "Text-only post · Swipe up/down for the next post");
+                ? "Swipe to browse · Tap to pause or play"
+                : "Text-only post · Swipe up for the next post");
 
         View.OnTouchListener swipe = (v, event) -> {
             switch (event.getActionMasked()) {
@@ -419,32 +448,28 @@ public final class ThreadFeedActivity extends Activity {
         mediaPane.setOnTouchListener(swipe);
 
         if (!current.hasMedia()) {
-            TextView message = text(shorten(current.text.isEmpty() ? "Text-only post" : current.text, 1800), 20, FG);
+            TextView message = text(shorten(current.text.isEmpty() ? "Text-only post" : current.text, 1800), 19, FG);
             message.setGravity(Gravity.CENTER);
-            message.setPadding(dp(28), dp(80), dp(28), dp(200));
+            message.setPadding(dp(28), dp(80), dp(28), dp(260));
             message.setOnTouchListener(swipe);
             mediaPane.addView(message, new FrameLayout.LayoutParams(-1, -1));
         } else if (current.isVideo()) {
-            TextView loading = text("Loading video preview…", 16, SUB);
-            loading.setGravity(Gravity.CENTER);
-            mediaPane.addView(loading, new FrameLayout.LayoutParams(-1, -1));
             VideoView player = new VideoView(this);
             video = player;
             mediaPane.addView(player, new FrameLayout.LayoutParams(-1, -1));
             player.setOnTouchListener(swipe);
-            final int serial = viewSerial;
+            FrameLayout loading = loadingOverlay("Loading video preview...", swipe);
             player.setOnPreparedListener(mp -> {
                 if (serial != viewSerial) return;
-                loading.setVisibility(View.GONE);
                 mp.setLooping(true);
                 player.start();
+                ui.postDelayed(() -> dismissLoading(loading, serial), 350);
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 if (serial == viewSerial) {
-                    loading.setVisibility(View.VISIBLE);
-                    loading.setText("This video codec can't be previewed here.\n"
-                            + "You can open it in your browser or save it privately.");
-                    status.setText("Playback depends on your phone's supported codecs.");
+                    showLoadingFailure(loading, "This video couldn't play on your device.\n"
+                            + "Use Open original to try an external player.", serial);
+                    status.setText("Playback depends on your Android video codecs.");
                 }
                 return true;
             });
@@ -455,20 +480,27 @@ public final class ThreadFeedActivity extends Activity {
             image.setBackgroundColor(BG);
             image.setOnTouchListener(swipe);
             mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
-            MediaThumbs.load(image, current.url, true);
+            FrameLayout loading = loadingOverlay("Loading image preview...", swipe);
+            MediaThumbs.load(image, current.url, true, ok -> {
+                if (serial != viewSerial) return;
+                if (ok) dismissLoading(loading, serial);
+                else showLoadingFailure(loading, "Image preview is unavailable.\nTry again or open the original.", serial);
+            });
             if (".gif".equals(current.ext))
-                status.setText("Animated GIF preview may show one frame on this device.");
+                status.setText("GIF previews may show one frame on some devices.");
         }
-        // A non-downloading fallback for video formats the device cannot decode.
         if (current.hasMedia()) {
-            TextView browser = text("↗ Open original preview", 12, PRIMARY);
-            browser.setPadding(dp(16), dp(70), dp(16), dp(10));
+            TextView browser = text("Open original", 12, PRIMARY);
+            browser.setTypeface(null, android.graphics.Typeface.BOLD);
+            browser.setBackground(rounded(0xd9121825, 12, 0xff374259));
+            browser.setPadding(dp(12), dp(11), dp(12), dp(11));
             browser.setOnClickListener(v -> {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(current.url))); }
-                catch (Exception e) { toast("No browser can open this media"); }
+                catch (Exception e) { toast("No external viewer available"); }
             });
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2,
-                    Gravity.TOP | Gravity.RIGHT);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.RIGHT);
+            lp.topMargin = dp(67);
+            lp.rightMargin = dp(10);
             mediaPane.addView(browser, lp);
         }
     }
