@@ -527,10 +527,11 @@ public final class ThreadFeedActivity extends Activity {
 
     private void showEntry() {
         ++viewSerial;
-        if (video != null) {
-            video.stopPlayback();
-            video = null;
+        if (feedPlayer != null) {
+            feedPlayer.release();
+            feedPlayer = null;
         }
+        bufferingLabel = null;
         mediaPane.removeAllViews();
         List<Entry> list = visible();
         if (list.isEmpty()) {
@@ -539,10 +540,12 @@ public final class ThreadFeedActivity extends Activity {
             counter.setText("0 items");
             saveButton.setEnabled(false);
             upNextRow.removeAllViews();
+            videoTools.setVisibility(View.GONE);
             return;
         }
         position = Math.max(0, Math.min(position, list.size() - 1));
         populateUpNext();
+        prepareNextVideo();
         final int serial = viewSerial;
         final Entry current = list.get(position);
         getSharedPreferences("watch_resume_v1", MODE_PRIVATE).edit()
@@ -559,8 +562,10 @@ public final class ThreadFeedActivity extends Activity {
                 + (current.text.isEmpty() ? "No description" : shorten(current.text, 120)));
         saveButton.setEnabled(current.hasMedia());
         saveButton.setText(current.hasMedia() ? "Save to vault" : "Text only");
+        videoTools.setVisibility(current.isVideo() ? View.VISIBLE : View.GONE);
+        fitButton.setText("Fit");
         status.setText(current.hasMedia()
-                ? "Swipe to browse · Tap to pause or play"
+                ? "Size: " + formatSize(current.size) + " · Swipe to browse"
                 : "Text-only post · Swipe up for the next post");
 
         View.OnTouchListener swipe = (v, event) -> {
@@ -574,9 +579,8 @@ public final class ThreadFeedActivity extends Activity {
                     float dx = event.getRawX() - touchStartX;
                     if (Math.abs(dy) > dp(65) && Math.abs(dy) > Math.abs(dx) * 1.3f) {
                         move(dy < 0 ? 1 : -1);
-                    } else if (video != null && Math.abs(dy) < dp(30)) {
-                        if (video.isPlaying()) video.pause();
-                        else video.start();
+                    } else if (feedPlayer != null && Math.abs(dy) < dp(30)) {
+                        feedPlayer.togglePlay();
                     }
                     return true;
                 default:
@@ -592,26 +596,33 @@ public final class ThreadFeedActivity extends Activity {
             message.setOnTouchListener(swipe);
             mediaPane.addView(message, new FrameLayout.LayoutParams(-1, -1));
         } else if (current.isVideo()) {
-            VideoView player = new VideoView(this);
-            video = player;
-            mediaPane.addView(player, new FrameLayout.LayoutParams(-1, -1));
-            player.setOnTouchListener(swipe);
             FrameLayout loading = loadingOverlay("Buffering video...", swipe);
-            player.setOnPreparedListener(mp -> {
-                if (serial != viewSerial) return;
-                mp.setLooping(true);
-                player.start();
-                ui.postDelayed(() -> dismissLoading(loading, serial), 350);
-            });
-            player.setOnErrorListener((mp, what, extra) -> {
-                if (serial == viewSerial) {
-                    showLoadingFailure(loading, "This video couldn't play on your device.\n"
-                            + "Use Open original to try an external player.", serial);
-                    status.setText("Playback depends on your Android video codecs.");
+            feedPlayer = new FeedVideoPlayer(this, mediaPane, current.url, current.size,
+                    new FeedVideoPlayer.Events() {
+                @Override public void onReady() {
+                    if (serial == viewSerial) dismissLoading(loading, serial);
                 }
-                return true;
+                @Override public void onBuffering(int percent, long cached, long total) {
+                    if (serial != viewSerial) return;
+                    String sizeText = total > 0 ? formatSize(total) : "size unknown";
+                    String cachedText = total > 0 ? " · Cached "
+                            + Math.min(100, Math.round(cached * 100f / total)) + "%" : "";
+                    status.setText("Playback buffered " + percent + "% · File " + sizeText + cachedText);
+                    if (bufferingLabel != null && loading.getParent() != null)
+                        bufferingLabel.setText("Buffering " + percent + "% of playback\n"
+                                + sizeText + " total" + cachedText);
+                }
+                @Override public void onError(String problem) {
+                    if (serial == viewSerial) {
+                        showLoadingFailure(loading, problem +
+                                "\nUse Original below to open another player.", serial);
+                        status.setText("Video playback unavailable · File " + formatSize(current.size));
+                    }
+                }
             });
-            player.setVideoURI(Uri.parse(current.url));
+            feedPlayer.view().setOnTouchListener(swipe);
+            // Keep loading above the video, but not above the separate controls.
+            loading.bringToFront();
         } else {
             ImageView image = new ImageView(this);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -626,20 +637,6 @@ public final class ThreadFeedActivity extends Activity {
             });
             if (".gif".equals(current.ext))
                 status.setText("GIF previews may show one frame on some devices.");
-        }
-        if (current.hasMedia()) {
-            TextView browser = text("Open original", 12, PRIMARY);
-            browser.setTypeface(null, android.graphics.Typeface.BOLD);
-            browser.setBackground(rounded(0xd9121825, 12, 0xff374259));
-            browser.setPadding(dp(12), dp(11), dp(12), dp(11));
-            browser.setOnClickListener(v -> {
-                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(current.url))); }
-                catch (Exception e) { toast("No external viewer available"); }
-            });
-            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.RIGHT);
-            lp.topMargin = dp(67);
-            lp.rightMargin = dp(10);
-            mediaPane.addView(browser, lp);
         }
     }
 
