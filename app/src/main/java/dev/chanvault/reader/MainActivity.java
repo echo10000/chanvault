@@ -827,6 +827,11 @@ public final class MainActivity extends Activity {
         }
 
         void download(String source, String title, String board, long threadId) throws Exception {
+            download(source, title, board, threadId, "");
+        }
+
+        void download(String source, String title, String board, long threadId,
+                      String threadTitle) throws Exception {
             if (exists(source)) return;
             if (!MediaAddress.isValidMediaUrl(source))
                 throw new Exception("Unsupported HTTPS media");
@@ -859,6 +864,7 @@ public final class MainActivity extends Activity {
                 row.put("id", id); row.put("file", name); row.put("source", source);
                 row.put("title", title.substring(0, Math.min(title.length(), 120)));
                 row.put("board", board); row.put("thread", threadId);
+                row.put("threadTitle", ThreadTitles.clean(threadTitle));
                 row.put("size", size); row.put("savedAt", System.currentTimeMillis());
                 synchronized (this) {
                     JSONArray data = load();
