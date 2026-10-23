@@ -6,6 +6,9 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Html;
@@ -78,6 +81,8 @@ public final class ThreadFeedActivity extends Activity {
             finish(); return;
         }
         vault = new MainActivity.Vault(new File(getFilesDir(), "vault"));
+        mediaOnly = getSharedPreferences("watch_resume_v1", MODE_PRIVATE)
+            .getBoolean("mode_" + board + "_" + threadId, true);
         makeScreen();
         loadThread();
     }
@@ -174,7 +179,7 @@ public final class ThreadFeedActivity extends Activity {
         counter = text("Loading thread...", 11, SUB);
         titleStack.addView(counter);
         top.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
-        modeButton = button("All posts", this::toggleMode);
+        modeButton = button(mediaOnly ? "All posts" : "Media only", this::toggleMode);
         top.addView(modeButton, new LinearLayout.LayoutParams(dp(88), dp(42)));
         root.addView(top, new LinearLayout.LayoutParams(-1, dp(58)));
 
@@ -348,7 +353,9 @@ public final class ThreadFeedActivity extends Activity {
                     if (e.hasMedia()) media.add(e);
                 }
                 runOnUiThread(() -> {
-                    int focus = (int) getIntent().getLongExtra("focusPost", 0);
+                    long focus = getIntent().getLongExtra("focusPost", 0);
+                    if (focus == 0) focus = getSharedPreferences("watch_resume_v1", MODE_PRIVATE)
+                            .getLong("post_" + board + "_" + threadId, 0);
                     if (focus > 0) {
                         for (int i = 0; i < media.size(); i++)
                             if (media.get(i).id == focus) { position = i; break; }
@@ -374,6 +381,8 @@ public final class ThreadFeedActivity extends Activity {
         if (position < list.size()) old = list.get(position);
         mediaOnly = !mediaOnly;
         modeButton.setText(mediaOnly ? "All posts" : "Media only");
+        getSharedPreferences("watch_resume_v1", MODE_PRIVATE).edit()
+                .putBoolean("mode_" + board + "_" + threadId, mediaOnly).apply();
         position = 0;
         if (old != null) {
             List<Entry> next = visible();
@@ -442,6 +451,13 @@ public final class ThreadFeedActivity extends Activity {
         populateUpNext();
         final int serial = viewSerial;
         final Entry current = list.get(position);
+        getSharedPreferences("watch_resume_v1", MODE_PRIVATE).edit()
+                .putString("latest_board", board)
+                .putLong("latest_thread", threadId)
+                .putLong("latest_post", current.id)
+                .putLong("post_" + board + "_" + threadId, current.id)
+                .putBoolean("mode_" + board + "_" + threadId, mediaOnly)
+                .apply();
         counter.setText((mediaOnly ? "Media " : "Post ") + (position + 1) + " / " + list.size()
                 + "  •  " + media.size() + " attachments");
         heading.setText(current.title);
@@ -533,35 +549,28 @@ public final class ThreadFeedActivity extends Activity {
         }
     }
 
+    private void askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 50);
+        }
+    }
+
     private void saveCurrent() {
         List<Entry> list = visible();
         if (position >= list.size()) return;
-        Entry item = list.get(position);
-        if (!item.hasMedia()) return;
-        final int serial = viewSerial;
-        saveButton.setEnabled(false);
-        saveButton.setText("Saving...");
-        saves.execute(() -> {
-            try {
-                boolean alreadySaved = vault.exists(item.url);
-                if (!alreadySaved) vault.download(item.url, item.title + item.ext, board, threadId);
-                runOnUiThread(() -> {
-                    if (serial == viewSerial) {
-                        saveButton.setEnabled(true);
-                        saveButton.setText(alreadySaved ? "Already saved" : "Saved to vault");
-                    }
-                    if (!alreadySaved) toast("Saved privately inside ChanVault");
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (serial == viewSerial) {
-                        saveButton.setEnabled(true);
-                        saveButton.setText("Retry save");
-                    }
-                    toast("Save failed: " + e.getMessage());
-                });
-            }
-        });
+        Entry current = list.get(position);
+        if (!current.hasMedia()) return;
+        askNotificationPermission();
+        try {
+            JSONArray batch = new JSONArray();
+            batch.put(DownloadService.item(current.url, current.title + current.ext, board, threadId));
+            DownloadService.enqueue(this, batch);
+            status.setText("Download queued • See your notification");
+            toast("Download added to the background queue");
+        } catch (Exception e) {
+            toast("Could not queue download: " + e.getMessage());
+        }
     }
 
     private void openPosts() {
@@ -573,70 +582,40 @@ public final class ThreadFeedActivity extends Activity {
     }
 
     private void confirmBatch() {
-        if (batchRunning) {
-            cancelBatch.set(true);
-            batchButton.setText("Finishing current file...");
-            batchButton.setEnabled(false);
+        if (media.isEmpty()) {
+            toast("No supported media in this thread");
             return;
         }
-        if (media.isEmpty()) { toast("This thread has no supported media"); return; }
         long estimate = 0;
-        boolean hasUnknownSizes = false;
+        boolean unknown = false;
         for (Entry e : media) {
             estimate += e.size;
-            if (e.size <= 0) hasUnknownSizes = true;
+            if (e.size <= 0) unknown = true;
         }
-        String detail = "Save all " + media.size() + " supported attachments (videos, WebMs, GIFs and images)"
-                + " into ChanVault's private storage.\n\n"
-                + "Estimated total: " + formatSize(estimate) + (hasUnknownSizes ? " or more" : "")
-                + "\n\nExisting downloads will be skipped. Files larger than 250 MB are skipped."
-                + " Keep ChanVault open until completion. This may use substantial data and storage.";
-        new AlertDialog.Builder(this)
-                .setTitle("Download entire thread?")
-                .setMessage(detail)
-                .setNegativeButton("Not now", null)
-                .setPositiveButton("Download all", (d, w) -> startBatch())
+        String message = "Save " + media.size() + " supported attachments to ChanVault's private storage?"
+                + "\n\nEstimated size: " + formatSize(estimate) + (unknown ? " or more" : "")
+                + "\n\nDownloads can continue when you leave ChanVault. Progress and cancellation appear"
+                + " in Android's notification shade. Existing files are skipped.";
+        new AlertDialog.Builder(this).setTitle("Download entire thread?")
+                .setMessage(message)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Queue downloads", (d, w) -> startBatch())
                 .show();
     }
 
     private void startBatch() {
-        if (batchRunning) return;
-        batchRunning = true;
-        cancelBatch.set(false);
-        batchButton.setText("Cancel remaining downloads");
-        status.setText("Preparing downloads...");
-        saves.execute(() -> {
-            int saved = 0, skipped = 0, failed = 0;
-            int total = media.size();
-            for (int i = 0; i < total && !cancelBatch.get(); i++) {
-                Entry e = media.get(i);
-                final int current = i + 1;
-                runOnUiThread(() -> status.setText("Downloading " + current + " / " + total + " · #" + e.id));
-                try {
-                    if (vault.exists(e.url)) { skipped++; continue; }
-                    if (e.size > 250L * 1024 * 1024) { failed++; continue; }
-                    if (e.size > 0 && new File(getFilesDir(), "vault").getUsableSpace() < e.size + 16L*1024*1024) {
-                        failed++;
-                        cancelBatch.set(true);
-                        runOnUiThread(() -> toast("Low phone storage. Batch stopped."));
-                        break;
-                    }
-                    vault.download(e.url, e.title + e.ext, board, threadId);
-                    saved++;
-                } catch (Exception ex) { failed++; }
+        askNotificationPermission();
+        try {
+            JSONArray batch = new JSONArray();
+            for (Entry e : media) if (e.hasMedia()) {
+                batch.put(DownloadService.item(e.url, e.title + e.ext, board, threadId));
             }
-            final String result = "Saved " + saved + " · already saved " + skipped
-                    + " · failed " + failed + (cancelBatch.get() ? " · stopped" : " · finished");
-            runOnUiThread(() -> {
-                batchRunning = false;
-                batchButton.setEnabled(true);
-                batchButton.setText("Download thread");
-                status.setText(result);
-                new AlertDialog.Builder(this).setTitle("Thread download summary")
-                        .setMessage(result + "\n\nFiles are inside Saved Media, not your Gallery.")
-                        .setPositiveButton("OK", null).show();
-            });
-        });
+            DownloadService.enqueue(this, batch);
+            status.setText("Queued " + batch.length() + " files • You can leave the app");
+            toast("Downloading in the background — check notifications");
+        } catch (Exception e) {
+            toast("Could not start download: " + e.getMessage());
+        }
     }
 
     private static String formatSize(long bytes) {
