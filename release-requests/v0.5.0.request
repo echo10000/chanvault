@@ -1,0 +1,4 @@
+Release request: v0.5.0
+Channel: stable signed APK
+Expected permanent release signing certificate: E9:91:1B:51:FD:E4:32:FF:13:AD:D4:6F:61:07:FB:6C:6F:DF:A4:D0:7E:D9:AA:F6:1B:35:F5:52:F4:95:CA:8D
+This file triggers one signed APK release run. The private signing key remains in GitHub Actions Secrets.
