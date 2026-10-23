@@ -21,13 +21,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # GitHub-hosted Ubuntu runners already include the Android SDK and sdkmanager.
-      # android-actions/setup-android@v3 currently attempts to install the obsolete
-      # "tools" package, which is no longer available and breaks the build.
       - name: Install required Android SDK components
         shell: bash
         run: |
-          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::Android SDK command-line tools not found in $SDK_ROOT"
+            exit 1
+          fi
+          echo "Using Android SDK manager: $SDKMANAGER"
+          (yes | "$SDKMANAGER" --licenses) >/dev/null 2>&1 || true
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
