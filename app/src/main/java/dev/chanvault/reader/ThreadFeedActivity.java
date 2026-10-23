@@ -21,7 +21,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -61,8 +62,15 @@ public final class ThreadFeedActivity extends Activity {
     private boolean nextExpanded = false;
     private TextView counter, heading, caption, prompt, status;
     private Button saveButton, modeButton, batchButton;
-    private VideoView video;
-    private LinearLayout upNextRow;
+    private FeedVideoPlayer feedPlayer;
+    private PlaybackCache streamCache;
+    private boolean preloadEnabled = true;
+    private LinearLayout upNextRow, videoTools;
+    private Button fitButton, preloadButton;
+    private final List<LinearLayout> carouselTiles = new ArrayList<>();
+    private final List<ImageView> carouselImages = new ArrayList<>();
+    private final Set<Integer> requestedThumbs = new HashSet<>();
+    private TextView bufferingLabel;
 
     static final class Entry {
         long id, size;
@@ -81,6 +89,9 @@ public final class ThreadFeedActivity extends Activity {
             finish(); return;
         }
         vault = new MainActivity.Vault(new File(getFilesDir(), "vault"));
+        streamCache = PlaybackCache.get(this);
+        preloadEnabled = getSharedPreferences("feed_settings", MODE_PRIVATE)
+                .getBoolean("prefetch_next", true);
         mediaOnly = getSharedPreferences("watch_resume_v1", MODE_PRIVATE)
             .getBoolean("mode_" + board + "_" + threadId, true);
         makeScreen();
@@ -98,7 +109,8 @@ public final class ThreadFeedActivity extends Activity {
 
     @Override protected void onDestroy() {
         cancelBatch.set(true);
-        if (video != null) video.stopPlayback();
+        if (feedPlayer != null) feedPlayer.release();
+        if (streamCache != null) streamCache.cancelPrefetch();
         io.shutdownNow();
         saves.shutdown();
         super.onDestroy();
@@ -193,7 +205,7 @@ public final class ThreadFeedActivity extends Activity {
 
         // A collapsed Up Next bar is shown by default; expanding the filmstrip
         // makes the player a little shorter instead of covering its pixels.
-        nextToggle = text("Up next   •   Tap to preview 3 items     ▾", 12, PRIMARY);
+        nextToggle = text("Browse all media    ▾", 12, PRIMARY);
         nextToggle.setTypeface(null, android.graphics.Typeface.BOLD);
         nextToggle.setGravity(Gravity.CENTER_VERTICAL);
         nextToggle.setPadding(dp(9), dp(5), dp(9), dp(5));
@@ -203,14 +215,50 @@ public final class ThreadFeedActivity extends Activity {
 
         nextScroller = new android.widget.HorizontalScrollView(this);
         nextScroller.setHorizontalScrollBarEnabled(false);
+        nextScroller.setOnScrollChangeListener((v, x, y, oldX, oldY) -> loadVisibleCarouselImages());
         upNextRow = new LinearLayout(this);
         upNextRow.setOrientation(LinearLayout.HORIZONTAL);
         upNextRow.setPadding(0, dp(5), 0, dp(4));
         nextScroller.addView(upNextRow);
         nextScroller.setVisibility(View.GONE);
-        LinearLayout.LayoutParams nextLp = new LinearLayout.LayoutParams(-1, dp(90));
+        LinearLayout.LayoutParams nextLp = new LinearLayout.LayoutParams(-1, dp(108));
         nextLp.topMargin = dp(3);
         bottom.addView(nextScroller, nextLp);
+
+        videoTools = new LinearLayout(this);
+        videoTools.setOrientation(LinearLayout.HORIZONTAL);
+        videoTools.setVisibility(View.GONE);
+        fitButton = button("Fit", () -> {
+            if (feedPlayer == null) return;
+            fitButton.setText(feedPlayer.toggleFill() ? "Fill" : "Fit");
+        });
+        videoTools.addView(fitButton, new LinearLayout.LayoutParams(0, dp(37), 1));
+        Button rotate = button("Rotate", () -> {
+            if (feedPlayer != null) {
+                int degrees = feedPlayer.rotate90();
+                status.setText("Rotated " + degrees + " degrees");
+            }
+        });
+        videoTools.addView(rotate, new LinearLayout.LayoutParams(0, dp(37), 1));
+        Button original = button("Original", () -> {
+            Entry e = currentEntry();
+            if (e == null || e.url == null) return;
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(e.url))); }
+            catch (Exception ex) { toast("No external player installed"); }
+        });
+        videoTools.addView(original, new LinearLayout.LayoutParams(0, dp(37), 1));
+        preloadButton = button(preloadEnabled ? "Preload on" : "Preload off", () -> {
+            preloadEnabled = !preloadEnabled;
+            getSharedPreferences("feed_settings", MODE_PRIVATE).edit()
+                    .putBoolean("prefetch_next", preloadEnabled).apply();
+            preloadButton.setText(preloadEnabled ? "Preload on" : "Preload off");
+            if (!preloadEnabled) streamCache.cancelPrefetch();
+            else prepareNextVideo();
+        });
+        videoTools.addView(preloadButton, new LinearLayout.LayoutParams(0, dp(37), 1));
+        LinearLayout.LayoutParams toolsLp = new LinearLayout.LayoutParams(-1, dp(37));
+        toolsLp.topMargin = dp(4);
+        bottom.addView(videoTools, toolsLp);
 
         heading = text("Loading media...", 15, FG);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -253,8 +301,13 @@ public final class ThreadFeedActivity extends Activity {
     private void setNextExpanded(boolean expand) {
         nextExpanded = expand;
         nextScroller.setVisibility(expand ? View.VISIBLE : View.GONE);
-        nextToggle.setText(expand ? "Up next   •   Hide previews     ▴"
-                : "Up next   •   Tap to preview 3 items     ▾");
+        nextToggle.setText(expand ? "Browse " + media.size() + " media · Hide  ▴"
+                : "Browse all " + media.size() + " media  ▾");
+        if (expand) nextScroller.post(() -> {
+            Entry active = currentEntry();
+            nextScroller.scrollTo(Math.max(0, media.indexOf(active) * dp(106) - dp(60)), 0);
+            loadVisibleCarouselImages();
+        });
     }
 
     private void populateUpNext() {
@@ -321,6 +374,7 @@ public final class ThreadFeedActivity extends Activity {
         labelView.setGravity(Gravity.CENTER);
         labelView.setMaxWidth(dp(260));
         indicator.addView(labelView);
+        bufferingLabel = labelView;
         FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(dp(280), -2, Gravity.CENTER);
         overlay.addView(indicator, center);
         overlay.setOnTouchListener(swipe);
