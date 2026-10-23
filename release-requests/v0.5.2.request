@@ -1,0 +1,4 @@
+Release v0.5.2
+Fix: DownloadService URL-validation regex exception and Vault media-source validator.
+UI: Responsive spacing for player controls and navigation buttons.
+Checks: CI media URL regression tests and permanent signing certificate verification.
