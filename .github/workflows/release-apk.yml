@@ -22,6 +22,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Test media download URL validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/media-validator"
+          javac -d "$RUNNER_TEMP/media-validator" \
+            app/src/main/java/dev/chanvault/reader/MediaAddress.java \
+            tools/MediaAddressValidationTest.java
+          java -cp "$RUNNER_TEMP/media-validator" dev.chanvault.reader.MediaAddressValidationTest
       - name: Install Android SDK
         shell: bash
         run: |
