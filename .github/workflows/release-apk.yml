@@ -1,0 +1,78 @@
+name: Publish signed ChanVault APK
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release version, e.g. v0.5.0"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Restore secure signing key
+        env:
+          CHANVAULT_KEYSTORE_B64: "${{ secrets.CHANVAULT_KEYSTORE_B64 }}"
+          CHANVAULT_SIGNING_PASSWORD: "${{ secrets.CHANVAULT_SIGNING_PASSWORD }}"
+        run: |
+          set -euo pipefail
+          if [ -z "$CHANVAULT_KEYSTORE_B64" ] || [ -z "$CHANVAULT_SIGNING_PASSWORD" ]; then
+            echo "::error::Configure CHANVAULT_KEYSTORE_B64 and CHANVAULT_SIGNING_PASSWORD in repository secrets before publishing."
+            exit 1
+          fi
+          printf '%s' "$CHANVAULT_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/chanvault-release.p12"
+          chmod 600 "$RUNNER_TEMP/chanvault-release.p12"
+      - name: Build release APK
+        env:
+          CHANVAULT_KEYSTORE_PATH: "${{ runner.temp }}/chanvault-release.p12"
+          CHANVAULT_SIGNING_PASSWORD: "${{ secrets.CHANVAULT_SIGNING_PASSWORD }}"
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Verify APK signature
+        run: |
+          set -euo pipefail
+          "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chanvault-signed-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          REQUESTED_TAG: "${{ inputs.tag }}"
+          REF_NAME: "${{ github.ref_name }}"
+        run: |
+          set -euo pipefail
+          TAG="${REQUESTED_TAG:-$REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must look like v0.5.0"
+            exit 1
+          fi
+          gh release create "$TAG" app/build/outputs/apk/release/app-release.apk \
+            --title "ChanVault $TAG" \
+            --notes "Signed Android release. Install over earlier releases signed with the SAME key. Back up your private vault before migrating from old debug APKs." \
+            --target "$GITHUB_SHA" \
+            --latest
