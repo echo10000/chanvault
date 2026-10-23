@@ -8,6 +8,7 @@ android {
         targetSdk 34
         versionCode 5
         versionName '0.5.0'
+        manifestPlaceholders = [appDisplayName: 'ChanVault']
     }
     // Signed releases use a keystore held in GitHub Actions Secrets,
     // NEVER checked into this public repository.
@@ -24,6 +25,14 @@ android {
         }
     }
     buildTypes {
+        // Every public CI debug build is signed with a temporary runner key.
+        // A separate application ID lets new testers install without ever
+        // uninstalling the original package and its app-private vault.
+        debug {
+            applicationIdSuffix '.preview'
+            versionNameSuffix '-preview'
+            manifestPlaceholders = [appDisplayName: 'ChanVault Preview']
+        }
         release {
             minifyEnabled false
             if (System.getenv('CHANVAULT_KEYSTORE_PATH') && System.getenv('CHANVAULT_SIGNING_PASSWORD')) {
