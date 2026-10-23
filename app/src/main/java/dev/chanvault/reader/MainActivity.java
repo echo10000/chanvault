@@ -234,7 +234,6 @@ public final class MainActivity extends Activity {
                         + "You can unblock it later from Discover. No downloaded files are deleted.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Block thread", (dialog, which) -> {
-                    String tim = obj.optString("tim", "");
                     String thumb = tim.matches("[0-9]{5,24}")
                             ? "https://i.4cdn.org/" + b + "/" + tim + "s.jpg" : "";
                     threadShelf.block(b, id, title, thumb);
