@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET"/>
-  <application android:label="ChanVault" android:theme="@style/AppTheme"
+  <application android:label="ChanVault" android:icon="@drawable/chanvault_icon" android:roundIcon="@drawable/chanvault_icon" android:theme="@style/AppTheme"
       android:allowBackup="false" android:usesCleartextTraffic="false">
     <activity android:name=".ThreadFeedActivity" android:exported="false"/>
     <activity android:name=".MainActivity$Player" android:exported="false"/>
