@@ -42,8 +42,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** A read-only, swipeable thread feed. Streaming a preview does not save it. */
 public final class ThreadFeedActivity extends Activity {
-    private static final int BG = 0xff0d1017, FG = 0xfff5f5fa, SUB = 0xffb6bdcb;
-    private static final int PRIMARY = 0xff9faefb;
+    private static int BG = 0xff102019, FG = 0xfff8f5e6, SUB = 0xffb6ceb9;
+    private static int PRIMARY = 0xffb5e077;
+    private ThemePalette theme;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newFixedThreadPool(2);
     private final ExecutorService saves = Executors.newSingleThreadExecutor();
@@ -95,8 +96,12 @@ public final class ThreadFeedActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        theme = ThemePalette.get(this);
+        BG = theme.background;
+        FG = theme.text;
+        SUB = theme.muted;
+        PRIMARY = theme.accent;
+        theme.applyBars(this);
         board = getIntent().getStringExtra("board");
         threadId = getIntent().getLongExtra("thread", 0);
         if (board == null || !board.matches("[a-z0-9]{1,12}") || threadId <= 0) {
@@ -158,9 +163,9 @@ public final class ThreadFeedActivity extends Activity {
         b.setAllCaps(false);
         b.setTextSize(13);
         boolean primary = title.equals("Save to vault") || title.equals("Download thread");
-        b.setTextColor(primary ? BG : FG);
-        b.setBackground(rounded(primary ? PRIMARY : 0xff293044, 13,
-                primary ? 0 : 0xff394359));
+        b.setTextColor(primary ? theme.onAccent : FG);
+        b.setBackground(rounded(primary ? PRIMARY : theme.chip, 13,
+                primary ? 0 : theme.border));
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         b.setPadding(dp(8), 0, dp(8), 0);
@@ -177,7 +182,7 @@ public final class ThreadFeedActivity extends Activity {
             android.graphics.drawable.Drawable d = getDrawable(icon);
             if (d != null) {
                 d = d.mutate();
-                d.setTint(primary ? BG : FG);
+                d.setTint(primary ? theme.onAccent : FG);
                 d.setBounds(0, 0, dp(18), dp(18));
                 b.setCompoundDrawables(d, null, null, null);
                 b.setCompoundDrawablePadding(dp(5));
@@ -195,7 +200,7 @@ public final class ThreadFeedActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
         top.setPadding(dp(10), dp(5), dp(10), dp(5));
-        top.setBackgroundColor(0xff161c29);
+        top.setBackgroundColor(theme.header);
         top.addView(button("Back", this::finish), new LinearLayout.LayoutParams(dp(76), dp(42)));
         LinearLayout titleStack = new LinearLayout(this);
         titleStack.setOrientation(LinearLayout.VERTICAL);
@@ -217,12 +222,13 @@ public final class ThreadFeedActivity extends Activity {
         root.addView(top, new LinearLayout.LayoutParams(-1, dp(58)));
 
         mediaPane = new FrameLayout(this);
+        mediaPane.setBackgroundColor(0xff0d1410);
         root.addView(mediaPane, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
         bottom.setPadding(dp(15), dp(9), dp(15), dp(12));
-        bottom.setBackground(rounded(0xff171d2a, 17, 0));
+        bottom.setBackground(rounded(theme.card, 17, 0));
 
         // A collapsed Up Next bar is shown by default; expanding the filmstrip
         // makes the player a little shorter instead of covering its pixels.
@@ -230,7 +236,7 @@ public final class ThreadFeedActivity extends Activity {
         nextToggle.setTypeface(null, android.graphics.Typeface.BOLD);
         nextToggle.setGravity(Gravity.CENTER_VERTICAL);
         nextToggle.setPadding(dp(14), dp(6), dp(12), dp(6));
-        nextToggle.setBackground(rounded(0xff292f43, 10, 0));
+        nextToggle.setBackground(rounded(theme.chip, 10, 0));
         nextToggle.setOnClickListener(v -> setNextExpanded(!nextExpanded));
         bottom.addView(nextToggle, new LinearLayout.LayoutParams(-1, dp(39)));
 
@@ -824,7 +830,7 @@ public final class ThreadFeedActivity extends Activity {
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
             currentImage = image;
             image.setAdjustViewBounds(false);
-            image.setBackgroundColor(BG);
+            image.setBackgroundColor(0xff0d1410);
             image.setOnTouchListener(swipe);
             mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
             FrameLayout loading = loadingOverlay("Loading image...", swipe);
