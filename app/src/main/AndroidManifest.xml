@@ -4,7 +4,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-  <application android:label="${appDisplayName}" android:icon="@drawable/chanvault_icon" android:roundIcon="@drawable/chanvault_icon" android:theme="@style/AppTheme"
+  <application android:label="${appDisplayName}" android:icon="@drawable/chanvault_clover_icon" android:roundIcon="@drawable/chanvault_clover_icon" android:theme="@style/AppTheme"
       android:allowBackup="false" android:usesCleartextTraffic="false">
     <service android:name=".DownloadService" android:exported="false" android:foregroundServiceType="dataSync"/>
     <activity android:name=".ThreadFeedActivity" android:exported="false"/>
