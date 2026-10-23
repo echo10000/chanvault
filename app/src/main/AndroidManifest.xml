@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <application android:label="ChanVault" android:icon="@drawable/chanvault_icon" android:roundIcon="@drawable/chanvault_icon" android:theme="@style/AppTheme"
       android:allowBackup="false" android:usesCleartextTraffic="false">
+    <service android:name=".DownloadService" android:exported="false" android:foregroundServiceType="dataSync"/>
     <activity android:name=".ThreadFeedActivity" android:exported="false"/>
     <activity android:name=".MainActivity$Player" android:exported="false"/>
     <activity android:name=".MainActivity" android:exported="true">
