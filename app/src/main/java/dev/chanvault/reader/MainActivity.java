@@ -53,6 +53,8 @@ public final class MainActivity extends Activity {
     private final Handler ui = new Handler(Looper.getMainLooper());
     private LinearLayout body;
     private Vault vault;
+    private ThreadShelf threadShelf;
+    private long shownShelfRevision;
     private String board = "g", page = "home";
     private int generation = 0;
     private long lastRequestAt = 0;
@@ -62,6 +64,8 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         vault = new Vault(new File(getFilesDir(), "vault"));
+        threadShelf = new ThreadShelf(this);
+        shownShelfRevision = threadShelf.revision();
         if (getIntent().hasExtra("thread") && getIntent().hasExtra("board")) {
             String openBoard = getIntent().getStringExtra("board");
             long openThread = getIntent().getLongExtra("thread", 0);
@@ -71,6 +75,14 @@ public final class MainActivity extends Activity {
             } else home();
         } else if (getIntent().getBooleanExtra("openSaved", false)) saved();
         else home();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (threadShelf == null || shownShelfRevision == threadShelf.revision()) return;
+        shownShelfRevision = threadShelf.revision();
+        if ("catalog".equals(page)) catalog(board);
+        else if ("home".equals(page)) home();
     }
 
     @Override protected void onDestroy() {
@@ -194,7 +206,43 @@ public final class MainActivity extends Activity {
         desc.setMaxLines(3);
         desc.setEllipsize(android.text.TextUtils.TruncateAt.END);
         info.addView(desc);
-        info.addView(label("Explore feed", 12, ACCENT));
+        LinearLayout quick = new LinearLayout(this);
+        quick.setOrientation(LinearLayout.HORIZONTAL);
+        TextView pin = label(threadShelf.isPinned(b, id) ? "Unpin" : "Pin", 13, ACCENT);
+        pin.setPadding(dp(8), dp(6), dp(8), dp(6));
+        pin.setBackgroundColor(0xff2a3041);
+        pin.setClickable(true);
+        pin.setOnClickListener(v -> {
+            if (threadShelf.isPinned(b, id)) {
+                threadShelf.unpin(b, id);
+                pin.setText("Pin");
+                toast("Thread unpinned");
+            } else if (threadShelf.pin(b, id, title,
+                    obj.optString("tim", "").matches("[0-9]{5,24}")
+                        ? "https://i.4cdn.org/" + b + "/" + obj.optString("tim") + "s.jpg" : "")) {
+                pin.setText("Unpin");
+                toast("Thread pinned to Discover");
+            }
+        });
+        quick.addView(pin);
+        TextView hide = label("Block", 13, MUTED);
+        hide.setPadding(dp(13), dp(6), dp(8), dp(6));
+        hide.setClickable(true);
+        hide.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Block this thread?")
+                .setMessage("Hide /" + b + "/ thread #" + id + " from your catalogs and Discover. "
+                        + "You can unblock it later from Discover. No downloaded files are deleted.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Block thread", (dialog, which) -> {
+                    String tim = obj.optString("tim", "");
+                    String thumb = tim.matches("[0-9]{5,24}")
+                            ? "https://i.4cdn.org/" + b + "/" + tim + "s.jpg" : "";
+                    threadShelf.block(b, id, title, thumb);
+                    body.removeView(tile);
+                    toast("Thread blocked locally");
+                }).show());
+        quick.addView(hide);
+        info.addView(quick);
         tile.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -213,6 +261,7 @@ public final class MainActivity extends Activity {
     private void shell(String title, String nextPage) {
         page = nextPage;
         generation++;
+        if (threadShelf != null) shownShelfRevision = threadShelf.revision();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
@@ -241,15 +290,17 @@ public final class MainActivity extends Activity {
         shell("Discover", "home");
         body.addView(button("Check for signed updates", () -> UpdateChecker.check(this)));
         spacing(9);
+        showPinnedThreads();
         android.content.SharedPreferences resumePrefs = getSharedPreferences("watch_resume_v1", MODE_PRIVATE);
         String lastBoard = resumePrefs.getString("latest_board", "");
         long lastThread = resumePrefs.getLong("latest_thread", 0);
         long lastPost = resumePrefs.getLong("latest_post", 0);
-        if (lastBoard.matches("[a-z0-9]{1,12}") && lastThread > 0) {
+        if (lastBoard.matches("[a-z0-9]{1,12}") && lastThread > 0
+                && !threadShelf.isBlocked(lastBoard, lastThread)) {
             card("Continue watching", "Return to /" + lastBoard + "/  ·  thread #" + lastThread,
                     () -> openFeed(lastBoard, lastThread, lastPost));
         }
-                final int visibleGeneration = generation;
+        final int visibleGeneration = generation;
         BoardsHome home = new BoardsHome(this, body, new BoardsHome.Navigator() {
             @Override public void board(String requestedBoard) { catalog(requestedBoard); }
             @Override public void thread(String requestedBoard, long threadId) {
@@ -257,6 +308,92 @@ public final class MainActivity extends Activity {
             }
         }, () -> generation == visibleGeneration && !isFinishing() && !isDestroyed());
         home.render(board);
+    }
+
+    private void showPinnedThreads() {
+        List<ThreadShelf.Item> pins = threadShelf.pinned();
+        TextView heading = label("Pinned threads", 19, TEXT);
+        body.addView(heading);
+        if (pins.isEmpty()) {
+            body.addView(label("Pin any thread from its catalog or player to find it here.", 13, MUTED));
+        } else {
+            for (ThreadShelf.Item item : pins) {
+                LinearLayout panel = new LinearLayout(this);
+                panel.setOrientation(LinearLayout.HORIZONTAL);
+                panel.setGravity(Gravity.CENTER_VERTICAL);
+                panel.setPadding(dp(11), dp(11), dp(11), dp(11));
+                android.graphics.drawable.GradientDrawable bg =
+                        new android.graphics.drawable.GradientDrawable();
+                bg.setColor(0xff202637);
+                bg.setCornerRadius(dp(16));
+                panel.setBackground(bg);
+                if (!item.thumbnail.isEmpty()) {
+                    ImageView image = new ImageView(this);
+                    image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(dp(66), dp(72));
+                    imgLp.rightMargin = dp(10);
+                    panel.addView(image, imgLp);
+                    MediaThumbs.load(image, item.thumbnail, false);
+                }
+                LinearLayout words = new LinearLayout(this);
+                words.setOrientation(LinearLayout.VERTICAL);
+                TextView title = label(item.title, 15, TEXT);
+                title.setMaxLines(2);
+                title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                words.addView(title);
+                words.addView(label(item.label(), 12, MUTED));
+                LinearLayout controls = new LinearLayout(this);
+                TextView open = label("Open", 13, ACCENT);
+                open.setPadding(dp(7), dp(5), dp(10), dp(5));
+                open.setOnClickListener(v -> openFeed(item.board, item.id, 0));
+                controls.addView(open);
+                TextView unpin = label("Unpin", 13, MUTED);
+                unpin.setPadding(dp(7), dp(5), dp(10), dp(5));
+                unpin.setOnClickListener(v -> {
+                    threadShelf.unpin(item.board, item.id);
+                    home();
+                });
+                controls.addView(unpin);
+                words.addView(controls);
+                panel.addView(words, new LinearLayout.LayoutParams(0, -2, 1));
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+                lp.bottomMargin = dp(9);
+                body.addView(panel, lp);
+            }
+        }
+        List<ThreadShelf.Item> hidden = threadShelf.blocked();
+        body.addView(button("Manage blocked threads (" + hidden.size() + ")",
+                this::showBlockedThreads));
+        spacing(15);
+    }
+
+    private void showBlockedThreads() {
+        List<ThreadShelf.Item> items = threadShelf.blocked();
+        if (items.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Blocked threads")
+                    .setMessage("No threads are blocked. Blocking hides a thread only inside ChanVault.")
+                    .setPositiveButton("Done", null).show();
+            return;
+        }
+        String[] names = new String[items.size()];
+        for (int i = 0; i < items.size(); i++) {
+            ThreadShelf.Item item = items.get(i);
+            names[i] = item.label() + " — " + item.title;
+        }
+        new AlertDialog.Builder(this).setTitle("Blocked threads · Tap to unblock")
+                .setItems(names, (dialog, which) -> {
+                    ThreadShelf.Item item = items.get(which);
+                    new AlertDialog.Builder(this)
+                            .setTitle("Unblock thread?")
+                            .setMessage(item.title + "\n" + item.label())
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Unblock", (d, w) -> {
+                                threadShelf.unblock(item.board, item.id);
+                                home();
+                                toast("Thread unblocked");
+                            }).show();
+                }).setNegativeButton("Done", null).show();
     }
 
     private static String validateBoard(String raw) {
@@ -285,17 +422,20 @@ public final class MainActivity extends Activity {
                     body.removeAllViews();
                     body.addView(label("Tap any thread to browse its media vertically.", 14, MUTED));
                     spacing(9);
-                    int limit = Math.min(100, threads.size());
-                    for (int i = 0; i < limit; i++) {
-                        JSONObject obj = threads.get(i);
+                    int shown = 0;
+                    for (JSONObject obj : threads) {
+                        if (shown >= 100) break;
                         long id = obj.optLong("no");
+                        if (threadShelf.isBlocked(b, id)) continue;
+                        shown++;
                         String title = clean(obj.optString("sub", ""));
                         if (title.isEmpty()) title = "Thread #" + id;
                         String preview = clean(obj.optString("com", ""));
                         if (preview.length() > 180) preview = preview.substring(0, 180) + "…";
                         catalogCard(obj, b, id, title, preview);
                     }
-                    if (limit < threads.size()) body.addView(label("Showing the first 100 threads.", 13, MUTED));
+                    if (shown == 0) body.addView(label("No visible threads. You can review blocked threads from Discover.", 13, MUTED));
+                    if (shown < threads.size()) body.addView(label("Showing up to 100 visible threads.", 13, MUTED));
                 });
             } catch (Exception e) { error(ticket, "Board error: " + e.getMessage()); }
         });
