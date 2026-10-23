@@ -47,13 +47,13 @@ final class BoardsHome {
         void thread(String board, long threadId);
     }
 
-    private static final int BG = 0xff101116;
-    private static final int CARD = 0xff1e2330;
-    private static final int BORDER = 0xff343b4c;
-    private static final int TEXT = 0xfff1f3ff;
-    private static final int MUTED = 0xffaab3cb;
-    private static final int ACCENT = 0xffb6bdff;
-    private static final int CHIP = 0xff2a3041;
+    private static int BG = 0xff102019;
+    private static int CARD = 0xff203629;
+    private static int BORDER = 0xff496850;
+    private static int TEXT = 0xfff8f5e6;
+    private static int MUTED = 0xffb6ceb9;
+    private static int ACCENT = 0xffb5e077;
+    private static int CHIP = 0xff2c4735;
     private static final String[] DEFAULTS = {"g", "wg", "w", "a", "v", "gif"};
     private static final ExecutorService PREVIEW_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Map<String, Spotlight> CACHE =
@@ -78,6 +78,14 @@ final class BoardsHome {
 
     BoardsHome(Activity activity, LinearLayout parent, Navigator navigation,
                BooleanSupplier stillVisible) {
+        ThemePalette look = ThemePalette.get(activity);
+        BG = look.background;
+        CARD = look.card;
+        BORDER = look.border;
+        TEXT = look.text;
+        MUTED = look.muted;
+        ACCENT = look.accent;
+        CHIP = look.chip;
         this.activity = activity;
         this.parent = parent;
         this.navigation = navigation;
@@ -114,7 +122,7 @@ final class BoardsHome {
         input.setBackgroundColor(0x00000000);
         search.addView(input, new LinearLayout.LayoutParams(0, dp(51), 1));
 
-        TextView go = pill("Explore", 13, ACCENT, CHIP);
+        TextView go = pill("Explore", 13, TEXT, CHIP);
         go.setOnClickListener(v -> {
             String board = input.getText().toString().toLowerCase(java.util.Locale.ROOT).trim().replace("/", "");
             if (!valid(board)) {
@@ -232,7 +240,7 @@ final class BoardsHome {
         actions.addView(browse, new LinearLayout.LayoutParams(0, dp(46), 1));
         browse.setOnClickListener(v -> { rememberRecent(board); navigation.board(board); });
 
-        TextView watch = pill("View thread", 13, 0xff171a2b, ACCENT);
+        TextView watch = pill("View thread", 13, ThemePalette.get(activity).onAccent, ACCENT);
         LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(0, dp(46), 1);
         actionLp.leftMargin = dp(8);
         actions.addView(watch, actionLp);
