@@ -62,6 +62,11 @@ public final class DownloadService extends Service {
     }
 
     public static JSONObject item(String url, String title, String board, long threadId) throws Exception {
+        return item(url, title, board, threadId, "");
+    }
+
+    public static JSONObject item(String url, String title, String board, long threadId,
+                                  String threadTitle) throws Exception {
         if (!MediaAddress.isValidMediaUrl(url)) {
             throw new Exception("Invalid media URL");
         }
@@ -75,6 +80,7 @@ public final class DownloadService extends Service {
         row.put("title", title == null ? "Saved media" : title.substring(0, Math.min(title.length(), 120)));
         row.put("board", board);
         row.put("thread", threadId);
+        row.put("threadTitle", ThreadTitles.clean(threadTitle));
         return row;
     }
 
@@ -127,7 +133,8 @@ public final class DownloadService extends Service {
                         if (row == null) continue;
                         try {
                             JSONObject clean = item(row.optString("url"), row.optString("title"),
-                                    row.optString("board"), row.optLong("thread"));
+                                    row.optString("board"), row.optLong("thread"),
+                                    row.optString("threadTitle"));
                             if (known.add(clean.optString("url"))) {
                                 pending.add(clean);
                                 accepted++;
@@ -154,7 +161,8 @@ public final class DownloadService extends Service {
                 if (item == null) continue;
                 try {
                     pending.add(item(item.optString("url"), item.optString("title"),
-                            item.optString("board"), item.optLong("thread")));
+                            item.optString("board"), item.optLong("thread"),
+                            item.optString("threadTitle")));
                 } catch (Exception ignored) {}
             }
         } catch (Exception ignored) {}
@@ -201,7 +209,7 @@ public final class DownloadService extends Service {
                             setStatus("Low storage: queue paused", 0, 0);
                         } else {
                             vault.download(src, next.optString("title"), next.optString("board"),
-                                    next.optLong("thread"));
+                                    next.optLong("thread"), next.optString("threadTitle"));
                             completed++;
                         }
                     }
