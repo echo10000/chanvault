@@ -33,8 +33,9 @@ import java.util.concurrent.Executors;
 
 /** Offline gallery with a board / thread / recent switcher; all reads remain private. */
 final class SavedLibrary {
-    private static final int TEXT = 0xfff4f5ff, SUB = 0xffaab3c8, ACCENT = 0xffaab7ff;
-    private static final int CARD = 0xff202635;
+    private static int TEXT = 0xfff8f5e6, SUB = 0xffb6ceb9, ACCENT = 0xffb5e077;
+    private static int CARD = 0xff203629;
+    private final ThemePalette theme;
     private static final ExecutorService THUMBS = Executors.newFixedThreadPool(2);
     private static final LruCache<String, Bitmap> CACHE = new LruCache<String, Bitmap>(16 * 1024 * 1024) {
         @Override protected int sizeOf(String key, Bitmap bmp) { return bmp.getByteCount(); }
@@ -48,6 +49,11 @@ final class SavedLibrary {
     private int grouping;
 
     SavedLibrary(MainActivity host, LinearLayout container, List<JSONObject> source, Runnable reload) {
+        this.theme = ThemePalette.get(host);
+        TEXT = theme.text;
+        SUB = theme.muted;
+        ACCENT = theme.accent;
+        CARD = theme.card;
         this.host = host;
         this.container = container;
         this.items = new ArrayList<>(source);
@@ -87,9 +93,9 @@ final class SavedLibrary {
         String[] options = {"By thread", "By board", "Recent"};
         for (int i = 0; i < options.length; i++) {
             final int target = i;
-            TextView control = text(options[i], 13, i == grouping ? 0xff101421 : TEXT, true);
+            TextView control = text(options[i], 13, i == grouping ? theme.onAccent : TEXT, true);
             control.setGravity(Gravity.CENTER);
-            control.setBackground(bg(i == grouping ? ACCENT : 0xff293044, 12));
+            control.setBackground(bg(i == grouping ? ACCENT : theme.chip, 12));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(46), 1);
             if (i != options.length - 1) lp.rightMargin = dp(7);
             chooser.addView(control, lp);
@@ -102,7 +108,7 @@ final class SavedLibrary {
         container.addView(chooser);
         addGap(container, 10);
         if (!items.isEmpty()) {
-            TextView watchAll = text("▶  Swipe through all saved media", 14, 0xff101421, true);
+            TextView watchAll = text("▶  Swipe through all saved media", 14, theme.onAccent, true);
             watchAll.setGravity(Gravity.CENTER);
             watchAll.setBackground(bg(ACCENT, 12));
             container.addView(watchAll, new LinearLayout.LayoutParams(-1, dp(48)));
@@ -177,7 +183,7 @@ final class SavedLibrary {
         strip.addView(tile, tileLp);
 
         FrameLayout imageHolder = new FrameLayout(host);
-        imageHolder.setBackground(bg(0xff323b50, 11));
+        imageHolder.setBackground(bg(theme.chip, 11));
         tile.addView(imageHolder, new LinearLayout.LayoutParams(-1, dp(131)));
         ImageView image = new ImageView(host);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
