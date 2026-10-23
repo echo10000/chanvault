@@ -21,6 +21,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.SeekBar;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -72,6 +73,15 @@ public final class ThreadFeedActivity extends Activity {
     private final List<ImageView> carouselImages = new ArrayList<>();
     private final Set<Integer> requestedThumbs = new HashSet<>();
     private TextView bufferingLabel;
+    private LinearLayout playbackControls;
+    private SeekBar playbackSeek;
+    private TextView playbackTime;
+    private Button playbackToggle;
+    private boolean userSeeking = false;
+    private final Runnable hidePlaybackControls = () -> {
+        if (playbackControls != null && !userSeeking)
+            playbackControls.setVisibility(View.GONE);
+    };
 
     static final class Entry {
         long id, size;
@@ -111,6 +121,7 @@ public final class ThreadFeedActivity extends Activity {
 
     @Override protected void onDestroy() {
         cancelBatch.set(true);
+        ui.removeCallbacks(hidePlaybackControls);
         if (feedPlayer != null) feedPlayer.release();
         if (streamCache != null) streamCache.cancelPrefetch();
         io.shutdownNow();
@@ -557,8 +568,119 @@ public final class ThreadFeedActivity extends Activity {
         overlay.addView(content, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER));
     }
 
+    private static String playtime(long ms) {
+        long seconds = Math.max(0, ms) / 1000;
+        return String.format(Locale.US, "%d:%02d", seconds / 60, seconds % 60);
+    }
+
+    private void updatePlaybackControls() {
+        if (feedPlayer == null || playbackControls == null) return;
+        long duration = feedPlayer.durationMs();
+        long position = feedPlayer.positionMs();
+        boolean canSeek = feedPlayer.isSeekable();
+        if (playbackSeek != null) {
+            playbackSeek.setEnabled(canSeek);
+            if (!userSeeking) playbackSeek.setProgress(
+                    duration > 0 ? (int) Math.min(1000, position * 1000L / duration) : 0);
+        }
+        if (playbackTime != null)
+            playbackTime.setText(playtime(position) + " / " + (duration > 0 ? playtime(duration) : "--:--"));
+        if (playbackToggle != null) playbackToggle.setText(feedPlayer.isPlaying() ? "Pause" : "Play");
+    }
+
+    private void scheduleControlsHide() {
+        ui.removeCallbacks(hidePlaybackControls);
+        if (!userSeeking) ui.postDelayed(hidePlaybackControls, 5500);
+    }
+
+    private void showPlaybackControls() {
+        if (feedPlayer == null || playbackControls == null) return;
+        playbackControls.setVisibility(View.VISIBLE);
+        playbackControls.bringToFront();
+        updatePlaybackControls();
+        scheduleControlsHide();
+    }
+
+    private void addPlaybackControls() {
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.VERTICAL);
+        controls.setPadding(dp(10), dp(9), dp(10), dp(8));
+        controls.setBackground(rounded(0xe91b2233, 15, 0xff46516b));
+        playbackControls = controls;
+
+        LinearLayout timeRow = new LinearLayout(this);
+        timeRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView time = text("0:00 / --:--", 12, FG);
+        playbackTime = time;
+        timeRow.addView(time, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView hint = text("Drag to seek", 11, SUB);
+        timeRow.addView(hint);
+        controls.addView(timeRow);
+
+        SeekBar seek = new SeekBar(this);
+        playbackSeek = seek;
+        seek.setMax(1000);
+        seek.setProgressTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
+        seek.setThumbTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
+        controls.addView(seek, new LinearLayout.LayoutParams(-1, dp(39)));
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onStartTrackingTouch(SeekBar bar) {
+                userSeeking = true;
+                ui.removeCallbacks(hidePlaybackControls);
+            }
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
+                if (!fromUser || feedPlayer == null) return;
+                long duration = feedPlayer.durationMs();
+                if (duration > 0 && playbackTime != null) playbackTime.setText(
+                        playtime(duration * progress / 1000L) + " / " + playtime(duration));
+            }
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                if (feedPlayer != null && feedPlayer.isSeekable()) {
+                    feedPlayer.seekTo(feedPlayer.durationMs() * bar.getProgress() / 1000L);
+                }
+                userSeeking = false;
+                updatePlaybackControls();
+                scheduleControlsHide();
+            }
+        });
+
+        LinearLayout actions = new LinearLayout(this);
+        Button rewind = button("-10 sec", () -> {
+            if (feedPlayer != null) feedPlayer.skipBy(-10000);
+            showPlaybackControls();
+        });
+        actions.addView(rewind, new LinearLayout.LayoutParams(0, dp(41), 1));
+        playbackToggle = button("Pause", () -> {
+            if (feedPlayer != null) feedPlayer.togglePlay();
+            showPlaybackControls();
+        });
+        LinearLayout.LayoutParams toggleLp = new LinearLayout.LayoutParams(0, dp(41), 1);
+        toggleLp.leftMargin = dp(8);
+        toggleLp.rightMargin = dp(8);
+        actions.addView(playbackToggle, toggleLp);
+        Button forward = button("+10 sec", () -> {
+            if (feedPlayer != null) feedPlayer.skipBy(10000);
+            showPlaybackControls();
+        });
+        actions.addView(forward, new LinearLayout.LayoutParams(0, dp(41), 1));
+        controls.addView(actions);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        lp.leftMargin = dp(9);
+        lp.rightMargin = dp(9);
+        lp.bottomMargin = dp(10);
+        mediaPane.addView(controls, lp);
+        controls.setVisibility(View.GONE);
+        updatePlaybackControls();
+    }
+
     private void showEntry() {
         ++viewSerial;
+        ui.removeCallbacks(hidePlaybackControls);
+        playbackControls = null;
+        playbackSeek = null;
+        playbackTime = null;
+        playbackToggle = null;
+        userSeeking = false;
         if (feedPlayer != null) {
             feedPlayer.release();
             feedPlayer = null;
@@ -611,8 +733,8 @@ public final class ThreadFeedActivity extends Activity {
                     float dx = event.getRawX() - touchStartX;
                     if (Math.abs(dy) > dp(65) && Math.abs(dy) > Math.abs(dx) * 1.3f) {
                         move(dy < 0 ? 1 : -1);
-                    } else if (feedPlayer != null && Math.abs(dy) < dp(30)) {
-                        feedPlayer.togglePlay();
+                    } else if (feedPlayer != null && Math.abs(dy) < dp(30) && Math.abs(dx) < dp(30)) {
+                        showPlaybackControls();
                     }
                     return true;
                 default:
@@ -640,6 +762,7 @@ public final class ThreadFeedActivity extends Activity {
                     String cachedText = total > 0 ? " · Cached "
                             + Math.min(100, Math.round(cached * 100f / total)) + "%" : "";
                     status.setText("Playback buffered " + percent + "% · File " + sizeText + cachedText);
+                    updatePlaybackControls();
                     if (bufferingLabel != null && loading.getParent() != null)
                         bufferingLabel.setText("Buffering " + percent + "% of playback\n"
                                 + sizeText + " total" + cachedText);
@@ -653,7 +776,8 @@ public final class ThreadFeedActivity extends Activity {
                 }
             });
             feedPlayer.view().setOnTouchListener(swipe);
-            // Keep loading above the video, but not above the separate controls.
+            addPlaybackControls();
+            // Loading status remains visible until playback is ready.
             loading.bringToFront();
         } else {
             ImageView image = new ImageView(this);
