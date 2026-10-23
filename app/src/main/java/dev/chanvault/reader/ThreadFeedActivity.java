@@ -310,52 +310,92 @@ public final class ThreadFeedActivity extends Activity {
         });
     }
 
+    private Entry currentEntry() {
+        List<Entry> items = visible();
+        return position >= 0 && position < items.size() ? items.get(position) : null;
+    }
+
+    // Full thread carousel, not just the next three videos.
+    // Download only the thumbnails close to what is visible on the screen.
     private void populateUpNext() {
-        upNextRow.removeAllViews();
-        List<Entry> source = visible();
-        if (source.isEmpty()) return;
-        List<Entry> upcoming = new ArrayList<>();
-        // Prefer future videos, then fill any remaining spaces with still media.
-        for (int i = position + 1; i < source.size() && upcoming.size() < 3; i++) {
-            Entry item = source.get(i);
-            if (item.hasMedia() && item.isVideo()) upcoming.add(item);
+        if (carouselTiles.isEmpty() && !media.isEmpty()) {
+            upNextRow.removeAllViews();
+            carouselImages.clear();
+            requestedThumbs.clear();
+            for (int i = 0; i < media.size(); i++) {
+                final Entry target = media.get(i);
+                final int index = i;
+                LinearLayout tile = new LinearLayout(this);
+                tile.setOrientation(LinearLayout.VERTICAL);
+                tile.setPadding(dp(4), dp(4), dp(4), dp(4));
+                tile.setBackground(rounded(0xff262d40, 10, 0xff3c465c));
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(99), dp(96));
+                lp.rightMargin = dp(7);
+                upNextRow.addView(tile, lp);
+                ImageView thumb = new ImageView(this);
+                thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                thumb.setBackground(rounded(0xff323b50, 8, 0));
+                tile.addView(thumb, new LinearLayout.LayoutParams(-1, dp(68)));
+                TextView number = text((i + 1) + " · " + (target.isVideo() ? "Video" : "Image"), 10, SUB);
+                number.setSingleLine(true);
+                number.setGravity(Gravity.CENTER);
+                tile.addView(number);
+                tile.setContentDescription("Jump to media " + (i + 1) + " of " + media.size());
+                tile.setClickable(true);
+                tile.setOnClickListener(v -> {
+                    int found = visible().indexOf(target);
+                    if (found < 0) {
+                        mediaOnly = true;
+                        modeButton.setText("All posts");
+                        found = index;
+                    }
+                    position = found;
+                    showEntry();
+                });
+                carouselImages.add(thumb);
+                carouselTiles.add(tile);
+            }
         }
-        for (int i = position + 1; i < source.size() && upcoming.size() < 3; i++) {
-            Entry item = source.get(i);
-            if (item.hasMedia() && !upcoming.contains(item)) upcoming.add(item);
+        Entry active = currentEntry();
+        for (int i = 0; i < carouselTiles.size(); i++) {
+            boolean selected = active == media.get(i);
+            carouselTiles.get(i).setBackground(rounded(
+                    selected ? 0xff414f80 : 0xff262d40,
+                    10, selected ? PRIMARY : 0xff3c465c));
         }
-        if (upcoming.isEmpty()) {
-            TextView done = text("You've reached the end of this thread", 12, SUB);
-            done.setGravity(Gravity.CENTER_VERTICAL);
-            upNextRow.addView(done, new LinearLayout.LayoutParams(-1, dp(70)));
+        nextToggle.setText(nextExpanded ? "Browse " + media.size() + " media · Hide  ▴"
+                : "Browse all " + media.size() + " media  ▾");
+        if (nextExpanded) nextScroller.post(() -> {
+            int where = media.indexOf(active);
+            if (where >= 0) nextScroller.smoothScrollTo(Math.max(0, where * dp(106) - dp(60)), 0);
+            loadVisibleCarouselImages();
+        });
+    }
+
+    private void loadVisibleCarouselImages() {
+        if (!nextExpanded || carouselImages.isEmpty()) return;
+        int start = Math.max(0, nextScroller.getScrollX() / dp(106) - 2);
+        int end = Math.min(media.size(), start + 11);
+        for (int i = start; i < end; i++) {
+            if (!requestedThumbs.add(i)) continue;
+            Entry item = media.get(i);
+            if (item.thumb != null) MediaThumbs.load(carouselImages.get(i), item.thumb, false);
         }
-        for (Entry item : upcoming) {
-            final int target = source.indexOf(item);
-            LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setPadding(dp(4), dp(3), dp(4), dp(3));
-            tile.setBackground(rounded(0xff252c3d, 10, 0xff374259));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(109), dp(79));
-            lp.rightMargin = dp(8);
-            upNextRow.addView(tile, lp);
-            ImageView thumb = new ImageView(this);
-            thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            thumb.setBackground(rounded(0xff353d50, 7, 0));
-            tile.addView(thumb, new LinearLayout.LayoutParams(-1, dp(54)));
-            if (item.thumb != null) MediaThumbs.load(thumb, item.thumb, false);
-            TextView title = text((item.isVideo() ? "VIDEO" : "IMAGE") + "  •  #" + item.id,
-                    10, SUB);
-            title.setSingleLine(true);
-            title.setGravity(Gravity.CENTER);
-            tile.addView(title);
-            tile.setContentDescription("Preview post " + item.id);
-            tile.setClickable(true);
-            tile.setOnClickListener(v -> {
-                v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
-                position = target;
-                showEntry();
-            });
+    }
+
+    private void prepareNextVideo() {
+        if (streamCache == null) return;
+        if (!preloadEnabled) { streamCache.cancelPrefetch(); return; }
+        Entry active = currentEntry();
+        int from = active == null ? -1 : media.indexOf(active);
+        for (int i = from + 1; i < media.size(); i++) {
+            Entry next = media.get(i);
+            if (next.isVideo()) {
+                streamCache.prefetch(next.url, next.size);
+                return;
+            }
         }
+        streamCache.cancelPrefetch();
     }
 
     private FrameLayout loadingOverlay(String label, View.OnTouchListener swipe) {
