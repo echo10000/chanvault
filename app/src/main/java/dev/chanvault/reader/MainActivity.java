@@ -59,7 +59,14 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         vault = new Vault(new File(getFilesDir(), "vault"));
-        home();
+        if (getIntent().hasExtra("thread") && getIntent().hasExtra("board")) {
+            String openBoard = getIntent().getStringExtra("board");
+            long openThread = getIntent().getLongExtra("thread", 0);
+            if (openBoard != null && openBoard.matches("[a-z0-9]{1,12}") && openThread > 0) {
+                board = openBoard;
+                thread(openBoard, openThread);
+            } else home();
+        } else home();
     }
 
     @Override protected void onDestroy() {
@@ -68,7 +75,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if ("thread".equals(page)) catalog(board);
+        if ("thread".equals(page) && getIntent().getBooleanExtra("sourceFeed", false)) finish();
+        else if ("thread".equals(page)) catalog(board);
         else if ("catalog".equals(page) || "saved".equals(page)) home();
         else super.onBackPressed();
     }
@@ -112,6 +120,61 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(10);
         body.addView(panel, lp);
+    }
+
+
+    /** A compact, touchable catalog tile with a real thread thumbnail. */
+    private void catalogCard(JSONObject obj, String b, long id, String title, String preview) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.HORIZONTAL);
+        tile.setGravity(Gravity.CENTER_VERTICAL);
+        tile.setPadding(dp(11), dp(11), dp(11), dp(11));
+        android.graphics.drawable.GradientDrawable bg =
+                new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xff1d222e);
+        bg.setCornerRadius(dp(17));
+        bg.setStroke(dp(1), 0xff303749);
+        tile.setBackground(bg);
+        tile.setClickable(true);
+        tile.setOnClickListener(v -> openFeed(b, id, 0));
+
+        ImageView thumbnail = new ImageView(this);
+        thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        thumbnail.setBackgroundColor(0xff333b4b);
+        LinearLayout.LayoutParams thumbLp = new LinearLayout.LayoutParams(dp(106), dp(114));
+        thumbLp.rightMargin = dp(14);
+        tile.addView(thumbnail, thumbLp);
+        String tim = obj.optString("tim", "");
+        if (tim.matches("[0-9]{5,24}"))
+            MediaThumbs.load(thumbnail, "https://i.4cdn.org/" + b + "/" + tim + "s.jpg", false);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        TextView heading = label(title, 16, TEXT);
+        heading.setMaxLines(2);
+        heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        info.addView(heading);
+        TextView meta = label(obj.optInt("replies") + " replies  •  " +
+                (obj.has("ext") ? "Media thread" : "Discussion"), 12, ACCENT);
+        info.addView(meta);
+        TextView desc = label(preview.isEmpty() ? "Tap to view the thread" : preview, 12, MUTED);
+        desc.setMaxLines(3);
+        desc.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        info.addView(desc);
+        info.addView(label("Explore feed  ↗", 12, ACCENT));
+        tile.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(10);
+        body.addView(tile, lp);
+    }
+
+    private void openFeed(String b, long id, long focusPost) {
+        Intent intent = new Intent(this, ThreadFeedActivity.class);
+        intent.putExtra("board", b);
+        intent.putExtra("thread", id);
+        if (focusPost > 0) intent.putExtra("focusPost", focusPost);
+        startActivity(intent);
     }
 
     private void shell(String title, String nextPage) {
@@ -170,7 +233,7 @@ public final class MainActivity extends Activity {
         catch (Exception e) { toast(e.getMessage()); return; }
         shell("/" + board + "/ catalog", "catalog");
         int ticket = generation;
-        body.addView(label("Loading board…", 14, MUTED));
+        body.addView(label("Loading threads and thumbnails…", 14, MUTED));
         String b = board;
         worker.execute(() -> {
             try {
@@ -183,7 +246,9 @@ public final class MainActivity extends Activity {
                 ui.post(() -> {
                     if (generation != ticket) return;
                     body.removeAllViews();
-                    int limit = Math.min(150, threads.size());
+                    body.addView(label("Tap any thread to browse its media vertically.", 14, MUTED));
+                    spacing(9);
+                    int limit = Math.min(100, threads.size());
                     for (int i = 0; i < limit; i++) {
                         JSONObject obj = threads.get(i);
                         long id = obj.optLong("no");
@@ -191,9 +256,9 @@ public final class MainActivity extends Activity {
                         if (title.isEmpty()) title = "Thread #" + id;
                         String preview = clean(obj.optString("com", ""));
                         if (preview.length() > 180) preview = preview.substring(0, 180) + "…";
-                        card(title, obj.optInt("replies") + " replies · " + preview, () -> thread(b, id));
+                        catalogCard(obj, b, id, title, preview);
                     }
-                    if (limit < threads.size()) body.addView(label("Showing the first 150 threads.", 13, MUTED));
+                    if (limit < threads.size()) body.addView(label("Showing the first 100 threads.", 13, MUTED));
                 });
             } catch (Exception e) { error(ticket, "Board error: " + e.getMessage()); }
         });
@@ -228,7 +293,8 @@ public final class MainActivity extends Activity {
                         body.addView(label("Attachment: " + display, 13, MUTED));
                         Button download = button("↓ Save privately", () -> download(mediaUrl, name, b, id));
                         body.addView(download);
-                        body.addView(button("View original media", () -> {
+                        body.addView(button("▶ Preview in swipe feed", () -> openFeed(b, id, postId)));
+                        body.addView(button("Open original media in browser", () -> {
                             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(mediaUrl));
                             startActivity(intent);
                         }));
@@ -330,7 +396,7 @@ public final class MainActivity extends Activity {
     }
 
     /** Saved files and metadata are only inside getFilesDir()/vault/. */
-    private static final class Vault {
+    static final class Vault {
         private final File directory, index;
         private static final long LIMIT = 250L * 1024 * 1024;
         Vault(File directory) {
@@ -351,6 +417,14 @@ public final class MainActivity extends Activity {
             return result;
         }
 
+
+        synchronized boolean exists(String source) throws Exception {
+            for (JSONObject row : list()) {
+                if (source.equals(row.optString("source"))) return true;
+            }
+            return false;
+        }
+
         synchronized void delete(String id) throws Exception {
             JSONArray old = load(), updated = new JSONArray();
             for (int i = 0; i < old.length(); i++) {
@@ -366,6 +440,7 @@ public final class MainActivity extends Activity {
         }
 
         void download(String source, String title, String board, long threadId) throws Exception {
+            if (exists(source)) return;
             if (!source.matches("https://i\\.4cdn\\.org/[a-z0-9]{1,12}/[0-9]{5,24}\\.(webm|mp4|gif|png|jpg|jpeg)"))
                 throw new Exception("Unsupported HTTPS media");
             String ext = source.substring(source.lastIndexOf('.') + 1).toLowerCase(Locale.US);
@@ -394,7 +469,7 @@ public final class MainActivity extends Activity {
                 }
                 if (size == 0 || !tmp.renameTo(target)) throw new Exception("Couldn't save media");
                 JSONObject row = new JSONObject();
-                row.put("id", id); row.put("file", name);
+                row.put("id", id); row.put("file", name); row.put("source", source);
                 row.put("title", title.substring(0, Math.min(title.length(), 120)));
                 row.put("board", board); row.put("thread", threadId);
                 row.put("size", size); row.put("savedAt", System.currentTimeMillis());
