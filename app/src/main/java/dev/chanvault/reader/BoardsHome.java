@@ -137,13 +137,15 @@ final class BoardsHome {
         TextView hint = text("Tap a heart to pin", 12, MUTED, false);
         favoritesHeader.addView(hint);
         parent.addView(favoritesHeader);
-        addSpace(new View(activity), 7);
+        addSpace(new View(activity), 10);
 
         favoriteContent = new LinearLayout(activity);
         favoriteContent.setOrientation(LinearLayout.VERTICAL);
+        favoriteContent.setPadding(dp(13), dp(11), dp(13), dp(11));
+        favoriteContent.setBackground(round(CARD, 16, BORDER));
         parent.addView(favoriteContent);
         updateFavorites();
-        addSpace(new View(activity), 14);
+        addSpace(new View(activity), 21);
 
         parent.addView(text("Discover boards", 18, TEXT, true));
         TextView subtitle = text("A highlight from each board, refreshed as you browse.", 12, MUTED, false);
@@ -350,19 +352,19 @@ final class BoardsHome {
         favoriteContent.removeAllViews();
         if (favorites.isEmpty()) {
             TextView empty = text("No favorites yet. Heart a board below to keep it close.", 13, MUTED, false);
-            empty.setPadding(dp(14), dp(13), dp(14), dp(13));
-            empty.setBackground(round(CARD, 14, BORDER));
+            empty.setPadding(dp(3), dp(5), dp(3), dp(5));
             favoriteContent.addView(empty);
             return;
         }
         android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(activity);
         scroller.setHorizontalScrollBarEnabled(false);
         LinearLayout chips = row();
-        chips.setPadding(0, dp(4), 0, dp(4));
+        chips.setPadding(dp(2), dp(1), dp(2), dp(1));
         List<String> sorted = new ArrayList<>(favorites);
         Collections.sort(sorted);
         for (String favorite : sorted) {
-            TextView chip = pill("\u2665 /" + favorite + "/", 14, ACCENT, CHIP);
+            TextView chip = pill("\u2665  /" + favorite + "/", 14, ACCENT, CHIP);
+            chip.setPadding(dp(15), 0, dp(15), 0);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, dp(46));
             lp.rightMargin = dp(9);
             chips.addView(chip, lp);
