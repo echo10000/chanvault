@@ -50,6 +50,7 @@ public final class ThreadFeedActivity extends Activity {
     private final List<Entry> all = new ArrayList<>();
     private final List<Entry> media = new ArrayList<>();
     private MainActivity.Vault vault;
+    private ThreadShelf threadShelf;
     private String board;
     private long threadId;
     private boolean mediaOnly = true, batchRunning = false;
@@ -89,6 +90,7 @@ public final class ThreadFeedActivity extends Activity {
             finish(); return;
         }
         vault = new MainActivity.Vault(new File(getFilesDir(), "vault"));
+        threadShelf = new ThreadShelf(this);
         streamCache = PlaybackCache.get(this);
         preloadEnabled = getSharedPreferences("feed_settings", MODE_PRIVATE)
                 .getBoolean("prefetch_next", true);
@@ -192,7 +194,12 @@ public final class ThreadFeedActivity extends Activity {
         titleStack.addView(counter);
         top.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
         modeButton = button(mediaOnly ? "All posts" : "Media only", this::toggleMode);
-        top.addView(modeButton, new LinearLayout.LayoutParams(dp(88), dp(42)));
+        top.addView(modeButton, new LinearLayout.LayoutParams(dp(82), dp(42)));
+        Button more = button("•••", () -> showThreadMenu());
+        more.setContentDescription("Thread actions: pin or block");
+        LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(dp(44), dp(42));
+        moreLp.leftMargin = dp(6);
+        top.addView(more, moreLp);
         root.addView(top, new LinearLayout.LayoutParams(-1, dp(58)));
 
         mediaPane = new FrameLayout(this);
@@ -670,6 +677,44 @@ public final class ThreadFeedActivity extends Activity {
             if (".gif".equals(current.ext))
                 status.setText("GIF previews may show one frame on some devices.");
         }
+    }
+
+    private void showThreadMenu() {
+        Entry first = all.isEmpty() ? null : all.get(0);
+        Entry current = currentEntry();
+        String title = first != null ? first.title :
+                current != null ? current.title : "Thread #" + threadId;
+        if (title.startsWith("Post #") && first != null && !first.text.isEmpty())
+            title = first.text.substring(0, Math.min(95, first.text.length()));
+        final String caption = title;
+        final String thumbnail = first != null && first.thumb != null ? first.thumb
+                : current != null && current.thumb != null ? current.thumb : "";
+        String pinLabel = threadShelf.isPinned(board, threadId) ? "Unpin thread" : "Pin thread";
+        new AlertDialog.Builder(this)
+                .setTitle("/" + board + "/ · #" + threadId)
+                .setItems(new String[]{pinLabel, "Block thread"}, (dialog, which) -> {
+                    if (which == 0) {
+                        if (threadShelf.isPinned(board, threadId)) {
+                            threadShelf.unpin(board, threadId);
+                            toast("Thread removed from Pinned");
+                        } else if (threadShelf.pin(board, threadId, caption, thumbnail)) {
+                            toast("Thread pinned to Discover");
+                        } else {
+                            toast("This thread is blocked. Unblock it from Discover first.");
+                        }
+                    } else {
+                        new AlertDialog.Builder(this).setTitle("Block thread?")
+                                .setMessage("This thread will disappear from ChanVault board catalogs "
+                                        + "and Discover. Blocking doesn't remove saved videos. "
+                                        + "Unblock it later in Discover → Manage blocked threads.")
+                                .setNegativeButton("Cancel", null)
+                                .setPositiveButton("Block", (d, w) -> {
+                                    threadShelf.block(board, threadId, caption, thumbnail);
+                                    toast("Thread blocked locally");
+                                    finish();
+                                }).show();
+                    }
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void askNotificationPermission() {
