@@ -41,7 +41,7 @@ public final class DownloadService extends Service {
     private final ExecutorService runner = Executors.newSingleThreadExecutor();
     private volatile boolean processing = false;
     private volatile boolean stopAfterCurrent = false;
-    private int completed, failed, skipped;
+    private int completed, failed, skipped, initialTotal;
     private SharedPreferences prefs;
     private MainActivity.Vault vault;
     private NotificationManager notifications;
@@ -93,6 +93,7 @@ public final class DownloadService extends Service {
             notifications.createNotificationChannel(channel);
         }
         restoreQueue();
+        initialTotal = pending.size();
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -132,6 +133,7 @@ public final class DownloadService extends Service {
                         } catch (Exception ignored) {}
                     }
                     persistQueue();
+                    initialTotal = completed + failed + skipped + pending.size();
                 }
                 if (accepted > 0) stopAfterCurrent = false;
             } catch (Exception ex) {
@@ -182,7 +184,10 @@ public final class DownloadService extends Service {
                     next = pending.get(0);
                     count = pending.size();
                 }
-                setStatus("Downloading 1 of " + count + " remaining", 0, 0);
+                int alreadyDone = completed + failed + skipped;
+                int displayTotal = Math.max(alreadyDone + count, initialTotal);
+                setStatus("Downloading " + (alreadyDone + 1) + " of " + displayTotal,
+                        alreadyDone, displayTotal);
                 try {
                     String src = next.optString("url");
                     if (vault.exists(src)) skipped++;
@@ -206,6 +211,9 @@ public final class DownloadService extends Service {
                     if (!pending.isEmpty() && pending.get(0).optString("url").equals(next.optString("url")))
                         pending.remove(0);
                     persistQueue();
+                    int n = completed + skipped + failed;
+                    setStatus("Processed " + n + " of " + Math.max(n, initialTotal),
+                            n, Math.max(n, initialTotal));
                 }
             }
             synchronized (lock) {
