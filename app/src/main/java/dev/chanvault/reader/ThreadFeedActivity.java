@@ -55,6 +55,7 @@ public final class ThreadFeedActivity extends Activity {
     private TextView counter, heading, caption, prompt, status;
     private Button saveButton, modeButton, batchButton;
     private VideoView video;
+    private LinearLayout upNextRow;
 
     static final class Entry {
         long id, size;
@@ -106,13 +107,45 @@ public final class ThreadFeedActivity extends Activity {
         return t;
     }
 
+    private android.graphics.drawable.GradientDrawable rounded(int color, int radius, int border) {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setColor(color);
+        background.setCornerRadius(dp(radius));
+        if (border != 0) background.setStroke(dp(1), border);
+        return background;
+    }
+
     private Button button(String title, Runnable action) {
         Button b = new Button(this);
         b.setText(title);
         b.setAllCaps(false);
-        b.setTextSize(12);
-        b.setTextColor(FG);
-        b.setOnClickListener(v -> action.run());
+        b.setTextSize(13);
+        boolean primary = title.equals("Save to vault") || title.equals("Download thread");
+        b.setTextColor(primary ? BG : FG);
+        b.setBackground(rounded(primary ? PRIMARY : 0xff293044, 13,
+                primary ? 0 : 0xff394359));
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(8), 0, dp(8), 0);
+        b.setOnClickListener(v -> {
+            v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+            action.run();
+        });
+        int icon = 0;
+        if (title.equals("Save to vault") || title.equals("Download thread"))
+            icon = R.drawable.ic_download;
+        else if (title.equals("Posts")) icon = R.drawable.ic_posts;
+        else if (title.equals("Back")) icon = R.drawable.ic_back;
+        if (icon != 0) {
+            android.graphics.drawable.Drawable d = getDrawable(icon);
+            if (d != null) {
+                d = d.mutate();
+                d.setTint(primary ? BG : FG);
+                d.setBounds(0, 0, dp(18), dp(18));
+                b.setCompoundDrawables(d, null, null, null);
+                b.setCompoundDrawablePadding(dp(5));
+            }
+        }
         return b;
     }
 
@@ -124,52 +157,142 @@ public final class ThreadFeedActivity extends Activity {
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(8), dp(6), dp(10), dp(6));
+        top.setPadding(dp(12), dp(6), dp(12), dp(7));
         top.setBackgroundColor(0xe610141e);
-        top.addView(button("‹", this::finish), new LinearLayout.LayoutParams(dp(46), dp(48)));
+        top.addView(button("Back", this::finish),
+                new LinearLayout.LayoutParams(dp(78), dp(44)));
         LinearLayout titleStack = new LinearLayout(this);
         titleStack.setOrientation(LinearLayout.VERTICAL);
-        titleStack.addView(text("chanvault.  /" + board + "/  #" + threadId, 15, FG));
+        titleStack.setPadding(dp(10), 0, dp(3), 0);
+        titleStack.addView(text("/" + board + "/  •  Thread #" + threadId, 14, FG));
         counter = text("Loading thread...", 12, SUB);
         titleStack.addView(counter);
         top.addView(titleStack, new LinearLayout.LayoutParams(0, -2, 1));
         modeButton = button("All posts", this::toggleMode);
-        top.addView(modeButton, new LinearLayout.LayoutParams(dp(98), dp(48)));
-        FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
-        root.addView(top, topLp);
+        top.addView(modeButton, new LinearLayout.LayoutParams(dp(94), dp(44)));
+        root.addView(top, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
-        bottom.setPadding(dp(16), dp(12), dp(16), dp(12));
-        bottom.setBackgroundColor(0xea111723);
-        heading = text("Loading thread media…", 17, FG);
+        bottom.setPadding(dp(14), dp(9), dp(14), dp(10));
+        bottom.setBackground(rounded(0xf3121825, 20, 0));
+
+        LinearLayout nextHead = new LinearLayout(this);
+        nextHead.setGravity(Gravity.CENTER_VERTICAL);
+        TextView nextLabel = text("UP NEXT", 11, PRIMARY);
+        nextLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+        nextHead.addView(nextLabel, new LinearLayout.LayoutParams(0, -2, 1));
+        nextHead.addView(text("Tap to jump", 11, SUB));
+        bottom.addView(nextHead);
+        android.widget.HorizontalScrollView scroller = new android.widget.HorizontalScrollView(this);
+        scroller.setHorizontalScrollBarEnabled(false);
+        upNextRow = new LinearLayout(this);
+        upNextRow.setOrientation(LinearLayout.HORIZONTAL);
+        upNextRow.setPadding(0, dp(7), 0, dp(7));
+        scroller.addView(upNextRow);
+        bottom.addView(scroller, new LinearLayout.LayoutParams(-1, dp(95)));
+
+        heading = text("Loading thread media...", 17, FG);
+        heading.setTypeface(null, android.graphics.Typeface.BOLD);
         heading.setMaxLines(2);
         bottom.addView(heading);
-        caption = text("Swipe up for the next item, down for the previous.", 13, SUB);
-        caption.setMaxLines(5);
-        caption.setPadding(0, dp(6), 0, dp(9));
+        caption = text("Swipe vertically to browse. Tap to pause.", 12, SUB);
+        caption.setMaxLines(2);
+        caption.setPadding(0, dp(5), 0, dp(8));
         bottom.addView(caption);
-        LinearLayout actionRow = new LinearLayout(this);
-        saveButton = button("↓ Save privately", this::saveCurrent);
-        actionRow.addView(saveButton, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actionRow.addView(button("Open posts", this::openPosts), new LinearLayout.LayoutParams(0, dp(48), 1));
-        bottom.addView(actionRow);
-        LinearLayout navigation = new LinearLayout(this);
-        navigation.addView(button("↑ Previous", () -> move(-1)), new LinearLayout.LayoutParams(0, dp(45), 1));
-        navigation.addView(button("↓ Next", () -> move(1)), new LinearLayout.LayoutParams(0, dp(45), 1));
-        bottom.addView(navigation);
-        LinearLayout batchRow = new LinearLayout(this);
-        batchButton = button("↓ Download all thread media", this::confirmBatch);
-        batchRow.addView(batchButton, new LinearLayout.LayoutParams(-1, dp(46)));
-        bottom.addView(batchRow);
-        status = text("Previews stream online. Nothing is saved until you choose Save.", 11, SUB);
-        status.setGravity(Gravity.CENTER_HORIZONTAL);
-        status.setPadding(0, dp(4), 0, 0);
-        bottom.addView(status);
-        FrameLayout.LayoutParams bottomLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        root.addView(bottom, bottomLp);
 
+        LinearLayout actions = new LinearLayout(this);
+        saveButton = button("Save to vault", this::saveCurrent);
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, dp(48), 1);
+        saveLp.rightMargin = dp(9);
+        actions.addView(saveButton, saveLp);
+        actions.addView(button("Posts", this::openPosts),
+                new LinearLayout.LayoutParams(0, dp(48), 1));
+        bottom.addView(actions);
+
+        batchButton = button("Download thread", this::confirmBatch);
+        LinearLayout.LayoutParams batchLp = new LinearLayout.LayoutParams(-1, dp(42));
+        batchLp.topMargin = dp(7);
+        bottom.addView(batchButton, batchLp);
+
+        status = text("Previews stream online • Nothing saves without your tap", 11, SUB);
+        status.setGravity(Gravity.CENTER_HORIZONTAL);
+        status.setPadding(0, dp(6), 0, 0);
+        bottom.addView(status);
+
+        FrameLayout.LayoutParams bottomLp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        bottomLp.setMargins(dp(6), 0, dp(6), dp(5));
+        root.addView(bottom, bottomLp);
         setContentView(root);
+    }
+
+    private void populateUpNext() {
+        upNextRow.removeAllViews();
+        List<Entry> source = visible();
+        if (source.isEmpty()) return;
+        List<Entry> upcoming = new ArrayList<>();
+        // Prefer future videos, then fill any remaining spaces with still media.
+        for (int i = position + 1; i < source.size() && upcoming.size() < 3; i++) {
+            Entry item = source.get(i);
+            if (item.hasMedia() && item.isVideo()) upcoming.add(item);
+        }
+        for (int i = position + 1; i < source.size() && upcoming.size() < 3; i++) {
+            Entry item = source.get(i);
+            if (item.hasMedia() && !upcoming.contains(item)) upcoming.add(item);
+        }
+        if (upcoming.isEmpty()) {
+            TextView done = text("You've reached the end of this thread", 12, SUB);
+            done.setGravity(Gravity.CENTER_VERTICAL);
+            upNextRow.addView(done, new LinearLayout.LayoutParams(-1, dp(70)));
+        }
+        for (Entry item : upcoming) {
+            final int target = source.indexOf(item);
+            LinearLayout tile = new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setPadding(dp(4), dp(3), dp(4), dp(3));
+            tile.setBackground(rounded(0xff252c3d, 10, 0xff374259));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(109), dp(79));
+            lp.rightMargin = dp(8);
+            upNextRow.addView(tile, lp);
+            ImageView thumb = new ImageView(this);
+            thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            thumb.setBackground(rounded(0xff353d50, 7, 0));
+            tile.addView(thumb, new LinearLayout.LayoutParams(-1, dp(54)));
+            if (item.thumb != null) MediaThumbs.load(thumb, item.thumb, false);
+            TextView title = text((item.isVideo() ? "VIDEO" : "IMAGE") + "  •  #" + item.id,
+                    10, SUB);
+            title.setSingleLine(true);
+            title.setGravity(Gravity.CENTER);
+            tile.addView(title);
+            tile.setContentDescription("Preview post " + item.id);
+            tile.setClickable(true);
+            tile.setOnClickListener(v -> {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+                position = target;
+                showEntry();
+            });
+        }
+    }
+
+    private FrameLayout loadingOverlay(String label, View.OnTouchListener swipe) {
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(0x8c0d1017);
+        android.widget.LinearLayout indicator = new android.widget.LinearLayout(this);
+        indicator.setOrientation(android.widget.LinearLayout.VERTICAL);
+        indicator.setGravity(Gravity.CENTER);
+        android.widget.ProgressBar spinner = new android.widget.ProgressBar(this);
+        spinner.setIndeterminate(true);
+        spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(PRIMARY));
+        indicator.addView(spinner, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        TextView labelView = text(label, 13, FG);
+        labelView.setPadding(dp(12), dp(12), dp(12), dp(4));
+        labelView.setGravity(Gravity.CENTER);
+        indicator.addView(labelView);
+        FrameLayout.LayoutParams center = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER);
+        overlay.addView(indicator, center);
+        overlay.setOnTouchListener(swipe);
+        mediaPane.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+        return overlay;
     }
 
     private void loadThread() {
