@@ -1,3 +1,10 @@
+## ChanVault v0.5.3 — pin and block threads
+
+- **Pin Thread:** from a thread's **•••** menu or the small **Pin** action in a board catalog. Pins are shown at the top of Discover, with the thread title, board, thumbnail (if available), and a one-tap shortcut.
+- **Block Thread:** from the same menu or catalog card (with confirmation). Blocked threads disappear from board catalogs, the Discover board highlights, and Continue Watching; they are removed from pinned threads if previously pinned.
+- **Undo safely:** Discover has **Manage blocked threads** to review and unblock; pinned threads have **Unpin**.
+- **Local only:** settings are stored in Android app preferences for this installation. Blocking does not block a user or remove a thread from the internet, and does not delete private downloads. Pinning bookmarks the thread; it does not archive posts or videos, so expired/deleted threads might stop opening.
+
 ## ChanVault v0.5.2 — fixed downloads and spacing
 
 - Fixed an Android regex interval crash that prevented **Save to vault** and **Download thread** from starting. Source URLs now use strict scheme, host, board, filename, and file-type validation without regex quantifier ranges.
