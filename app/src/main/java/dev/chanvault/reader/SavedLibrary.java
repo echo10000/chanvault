@@ -100,6 +100,19 @@ final class SavedLibrary {
             });
         }
         container.addView(chooser);
+        addGap(container, 10);
+        if (!items.isEmpty()) {
+            TextView watchAll = text("▶  Swipe through all saved media", 14, 0xff101421, true);
+            watchAll.setGravity(Gravity.CENTER);
+            watchAll.setBackground(bg(ACCENT, 12));
+            container.addView(watchAll, new LinearLayout.LayoutParams(-1, dp(48)));
+            watchAll.setOnClickListener(v -> {
+                Intent intent = new Intent(host, SavedFeedActivity.class);
+                intent.putExtra("group", "recent");
+                intent.putExtra("file", items.get(0).optString("file"));
+                host.startActivity(intent);
+            });
+        }
         addGap(container, 16);
 
         if (items.isEmpty()) {
@@ -143,7 +156,7 @@ final class SavedLibrary {
             container.addView(horizontal);
             addGap(container, 18);
         }
-        TextView hint = text("Tap to play or view · Long-press to delete a saved file", 12, SUB, false);
+        TextView hint = text("Tap to swipe through this group · Long-press to delete", 12, SUB, false);
         hint.setGravity(Gravity.CENTER_HORIZONTAL);
         hint.setPadding(dp(4), dp(8), dp(4), dp(24));
         container.addView(hint);
@@ -186,8 +199,11 @@ final class SavedLibrary {
         tile.addView(label);
         imageHolder.setContentDescription("Open " + row.optString("title", "saved media"));
         tile.setOnClickListener(v -> {
-            Intent intent = new Intent(host, MainActivity.Player.class);
+            Intent intent = new Intent(host, SavedFeedActivity.class);
             intent.putExtra("file", fileName);
+            intent.putExtra("group", grouping == 0 ? "thread" : grouping == 1 ? "board" : "recent");
+            if (grouping != 2) intent.putExtra("board", row.optString("board"));
+            if (grouping == 0) intent.putExtra("thread", row.optLong("thread"));
             host.startActivity(intent);
         });
         tile.setOnLongClickListener(v -> {
