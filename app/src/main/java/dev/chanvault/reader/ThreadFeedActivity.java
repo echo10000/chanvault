@@ -510,24 +510,26 @@ public final class ThreadFeedActivity extends Activity {
         if (position >= list.size()) return;
         Entry item = list.get(position);
         if (!item.hasMedia()) return;
+        final int serial = viewSerial;
         saveButton.setEnabled(false);
-        saveButton.setText("Saving…");
+        saveButton.setText("Saving...");
         saves.execute(() -> {
             try {
-                if (vault.exists(item.url)) {
-                    runOnUiThread(() -> { saveButton.setEnabled(true); saveButton.setText("✓ Already saved"); });
-                    return;
-                }
-                vault.download(item.url, item.title + item.ext, board, threadId);
+                boolean alreadySaved = vault.exists(item.url);
+                if (!alreadySaved) vault.download(item.url, item.title + item.ext, board, threadId);
                 runOnUiThread(() -> {
-                    saveButton.setEnabled(true);
-                    saveButton.setText("✓ Saved");
-                    toast("Saved inside ChanVault, not your Gallery");
+                    if (serial == viewSerial) {
+                        saveButton.setEnabled(true);
+                        saveButton.setText(alreadySaved ? "Already saved" : "Saved to vault");
+                    }
+                    if (!alreadySaved) toast("Saved privately inside ChanVault");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
-                    saveButton.setEnabled(true);
-                    saveButton.setText("↓ Retry save");
+                    if (serial == viewSerial) {
+                        saveButton.setEnabled(true);
+                        saveButton.setText("Retry save");
+                    }
                     toast("Save failed: " + e.getMessage());
                 });
             }
@@ -545,7 +547,7 @@ public final class ThreadFeedActivity extends Activity {
     private void confirmBatch() {
         if (batchRunning) {
             cancelBatch.set(true);
-            batchButton.setText("Stopping after current file…");
+            batchButton.setText("Finishing current file...");
             batchButton.setEnabled(false);
             return;
         }
@@ -574,7 +576,7 @@ public final class ThreadFeedActivity extends Activity {
         batchRunning = true;
         cancelBatch.set(false);
         batchButton.setText("Cancel remaining downloads");
-        status.setText("Preparing private batch download…");
+        status.setText("Preparing downloads...");
         saves.execute(() -> {
             int saved = 0, skipped = 0, failed = 0;
             int total = media.size();
@@ -600,7 +602,7 @@ public final class ThreadFeedActivity extends Activity {
             runOnUiThread(() -> {
                 batchRunning = false;
                 batchButton.setEnabled(true);
-                batchButton.setText("↓ Download all thread media");
+                batchButton.setText("Download thread");
                 status.setText(result);
                 new AlertDialog.Builder(this).setTitle("Thread download summary")
                         .setMessage(result + "\n\nFiles are inside Saved Media, not your Gallery.")
