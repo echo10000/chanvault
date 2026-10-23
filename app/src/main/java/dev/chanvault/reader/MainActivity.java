@@ -98,9 +98,35 @@ public final class MainActivity extends Activity {
         Button b = new Button(this);
         b.setText(text);
         b.setAllCaps(false);
-        b.setTextColor(TEXT);
         b.setTextSize(13);
-        b.setOnClickListener(v -> action.run());
+        boolean active = ("Browse".equals(text) && !"saved".equals(page))
+                || ("Saved Media".equals(text) && "saved".equals(page))
+                || "Save privately".equals(text) || "Open board".equals(text);
+        b.setTextColor(active ? BG : TEXT);
+        android.graphics.drawable.GradientDrawable background =
+                new android.graphics.drawable.GradientDrawable();
+        background.setColor(active ? ACCENT : 0xff292f3f);
+        background.setCornerRadius(dp(14));
+        if (!active) background.setStroke(dp(1), 0xff394256);
+        b.setBackground(background);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(11), 0, dp(11), 0);
+        b.setOnClickListener(v -> {
+            v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+            action.run();
+        });
+        if ("Browse".equals(text) || "Saved Media".equals(text)) {
+            android.graphics.drawable.Drawable d = getDrawable(
+                    "Browse".equals(text) ? R.drawable.ic_posts : R.drawable.ic_download);
+            if (d != null) {
+                d = d.mutate();
+                d.setTint(active ? BG : TEXT);
+                d.setBounds(0, 0, dp(17), dp(17));
+                b.setCompoundDrawables(d, null, null, null);
+                b.setCompoundDrawablePadding(dp(6));
+            }
+        }
         return b;
     }
 
@@ -113,7 +139,10 @@ public final class MainActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(13), dp(10), dp(13), dp(10));
-        panel.setBackgroundColor(PANEL);
+        android.graphics.drawable.GradientDrawable surface = new android.graphics.drawable.GradientDrawable();
+        surface.setColor(PANEL);
+        surface.setCornerRadius(dp(15));
+        panel.setBackground(surface);
         panel.addView(label(title, 17, TEXT));
         if (detail != null && !detail.isEmpty()) panel.addView(label(detail, 13, MUTED));
         if (action != null) panel.addView(button("Open", action));
