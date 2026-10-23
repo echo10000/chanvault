@@ -83,6 +83,19 @@ final class FeedVideoPlayer {
         if (engine.isPlaying()) engine.pause();
         else engine.play();
     }
+    long positionMs() { return released ? 0 : Math.max(0, engine.getCurrentPosition()); }
+    long durationMs() {
+        if (released) return 0;
+        long duration = engine.getDuration();
+        return duration > 0 && duration != androidx.media3.common.C.TIME_UNSET ? duration : 0;
+    }
+    boolean isSeekable() { return !released && engine.isCurrentMediaItemSeekable() && durationMs() > 0; }
+    void seekTo(long targetMs) {
+        if (!isSeekable()) return;
+        engine.seekTo(Math.min(Math.max(0, targetMs), durationMs()));
+    }
+    void skipBy(long offsetMs) { seekTo(positionMs() + offsetMs); }
+
     void pause() { if (!released) engine.pause(); }
     void resume() { if (!released) engine.play(); }
 
