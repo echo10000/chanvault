@@ -226,9 +226,13 @@ public final class MainActivity extends Activity {
         scroll.addView(body);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout nav = new LinearLayout(this);
-        nav.setPadding(dp(10), dp(4), dp(10), dp(5));
-        nav.addView(button("Browse", this::home), new LinearLayout.LayoutParams(0, dp(52), 1));
-        nav.addView(button("Saved Media", this::saved), new LinearLayout.LayoutParams(0, dp(52), 1));
+        nav.setPadding(dp(12), dp(8), dp(12), dp(11));
+        LinearLayout.LayoutParams browseLp = new LinearLayout.LayoutParams(0, dp(53), 1);
+        browseLp.rightMargin = dp(6);
+        nav.addView(button("Browse", this::home), browseLp);
+        LinearLayout.LayoutParams savedLp = new LinearLayout.LayoutParams(0, dp(53), 1);
+        savedLp.leftMargin = dp(6);
+        nav.addView(button("Saved Media", this::saved), savedLp);
         root.addView(nav);
         setContentView(root);
     }
@@ -383,18 +387,28 @@ public final class MainActivity extends Activity {
                     progress.setBackgroundColor(0xff252c3e);
                     body.addView(progress);
                     LinearLayout actions = new LinearLayout(this);
-                    actions.addView(button("Refresh", this::saved), new LinearLayout.LayoutParams(0, dp(44), 1));
+                    LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+                    refreshLp.rightMargin = dp(6);
+                    actions.addView(button("Refresh", this::saved), refreshLp);
+                    LinearLayout.LayoutParams stopLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+                    stopLp.leftMargin = dp(6);
                     actions.addView(button("Stop downloads", () -> {
                         DownloadService.cancel(this);
                         toast("Stopping after current download");
-                    }), new LinearLayout.LayoutParams(0, dp(44), 1));
-                    body.addView(actions);
+                    }), stopLp);
+                    LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(-1, -2);
+                    actionsLp.topMargin = dp(9);
+                    body.addView(actions, actionsLp);
                     LinearLayout backups = new LinearLayout(this);
-                    backups.addView(button("Export vault ZIP", this::exportVault),
-                            new LinearLayout.LayoutParams(0, dp(44), 1));
-                    backups.addView(button("Restore ZIP", this::importVault),
-                            new LinearLayout.LayoutParams(0, dp(44), 1));
-                    body.addView(backups);
+                    LinearLayout.LayoutParams exportLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+                    exportLp.rightMargin = dp(6);
+                    backups.addView(button("Export vault ZIP", this::exportVault), exportLp);
+                    LinearLayout.LayoutParams restoreLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+                    restoreLp.leftMargin = dp(6);
+                    backups.addView(button("Restore ZIP", this::importVault), restoreLp);
+                    LinearLayout.LayoutParams backupsLp = new LinearLayout.LayoutParams(-1, -2);
+                    backupsLp.topMargin = dp(9);
+                    body.addView(backups, backupsLp);
                     spacing(10);
                     LinearLayout gallery = new LinearLayout(this);
                     gallery.setOrientation(LinearLayout.VERTICAL);
@@ -530,7 +544,7 @@ public final class MainActivity extends Activity {
 
         void download(String source, String title, String board, long threadId) throws Exception {
             if (exists(source)) return;
-            if (!source.matches("https://i\\.4cdn\\.org/[a-z0-9]{1,12}/[0-9]{5,24}\\.(webm|mp4|gif|png|jpg|jpeg)"))
+            if (!MediaAddress.isValidMediaUrl(source))
                 throw new Exception("Unsupported HTTPS media");
             String ext = source.substring(source.lastIndexOf('.') + 1).toLowerCase(Locale.US);
             String id = UUID.randomUUID().toString();
