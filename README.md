@@ -1,3 +1,10 @@
+## ChanVault v0.5.3 — touch playback scrubbing
+
+- Tap a playing video to reveal a **seekable timeline**, elapsed/total time and **-10 sec / Play-Pause / +10 sec** controls.
+- Drag the timeline to jump to any seekable point. Seeking outside buffered content may briefly load more data.
+- Controls automatically disappear after about 5.5 seconds, or after you stop dragging; vertical swipes still move between posts.
+- Images are not given fake video seek controls; threads and board pin/block options remain on their menus.
+
 ## ChanVault v0.5.3 — pin and block threads
 
 - **Pin Thread:** from a thread's **•••** menu or the small **Pin** action in a board catalog. Pins are shown at the top of Discover, with the thread title, board, thumbnail (if available), and a one-tap shortcut.
