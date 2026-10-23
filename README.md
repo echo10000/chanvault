@@ -41,6 +41,14 @@ Create or securely generate a PKCS#12 keystore with alias `chanvault`. Back up t
 Then Actions -> **Publish signed ChanVault APK** -> Run workflow, entering a version tag such as `v0.5.0`. The workflow verifies the signature and publishes the APK to GitHub Releases. Future signed versions MUST use the same private key for in-place updates.
 
 **Critical existing-install warning:** Earlier debug APKs are signed using temporary GitHub runner keys. A permanently signed release cannot update them in place, and uninstalling erases their app-private vault. Version 0.4 did not include ZIP export. **Do not uninstall an existing debug APK while it holds files you need.** The old debuggable app's private files may be recoverable through USB debugging from a trusted computer, or you can re-download the originals after migration. The ZIP backup feature helps preserve data from v0.5 onward, but only once you have installed v0.5.
+## Safe testing after Android app conflicts
+
+CI debug builds now use a **separate package ID**, `dev.chanvault.reader.preview`, and appear as **ChanVault Preview**. This avoids an installation conflict with the original `dev.chanvault.reader`, so its saved media remains intact. The Preview version has its own empty vault; it will not inherit saved media from the original app.
+
+**Do not uninstall the old app** if it contains saved files. Debug APKs produced on different GitHub runners may still conflict with earlier Preview APKs due to ephemeral signing keys. Proper in-place updates need the permanently signed GitHub Release workflow and a consistent, securely stored signing key.
+
+To migrate the original private vault safely, back it up using trusted ADB `run-as` access on the installed debuggable build. Do not uninstall until that backup has been independently verified.
+
 ## Phone-only APK build
 
 1. Go to **Actions → Build Android APK** in this GitHub repository.
@@ -52,7 +60,7 @@ This project uses GitHub Actions to install JDK 17, Android SDK 35, Gradle 8.9 a
 
 ## Privacy and caveats
 
-Saved files are placed in `getFilesDir()/vault/`, not Android's public Gallery or Downloads folders. Android app sandboxing normally prevents other apps from reading them. They are **not encrypted**. **Uninstalling the app deletes the vault**; there is no export or backup yet. Playback of some WebM codecs depends on your Android device.
+Saved files are placed in `getFilesDir()/vault/`, not Android's public Gallery or Downloads folders. Android app sandboxing normally prevents other apps from reading them. They are **not encrypted**. **Uninstalling the app deletes the vault**; version 0.5 adds opt-in ZIP export/restore, which is not available on older installations. Playback of some WebM codecs depends on your Android device.
 
 Media endpoints are from the official [4chan read-only API](https://github.com/4chan/4chan-API). This is **unofficial**, unaffiliated with Read Chan or 4chan. Use the reader in accordance with the host site's rules. Do not represent it as an official client.
 
