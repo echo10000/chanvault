@@ -47,7 +47,8 @@ import java.util.concurrent.Executors;
  * Can be scoped to the selected thread, board, or all recent saved media.
  */
 public final class SavedFeedActivity extends Activity {
-    private static final int BG = 0xff0d1017, FG = 0xfff5f5fa, MUTED = 0xffb6bdcb, ACCENT = 0xff9faefb;
+    private static int BG = 0xff102019, FG = 0xfff8f5e6, MUTED = 0xffb6ceb9, ACCENT = 0xffb5e077;
+    private ThemePalette theme;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private final ArrayList<JSONObject> media = new ArrayList<>();
@@ -97,9 +98,9 @@ public final class SavedFeedActivity extends Activity {
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setColor(0xff2b3245);
+        background.setColor(theme.chip);
         background.setCornerRadius(dp(12));
-        background.setStroke(dp(1), 0xff46516a);
+        background.setStroke(dp(1), theme.border);
         b.setBackground(background);
         b.setOnClickListener(v -> {
             v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
@@ -110,8 +111,12 @@ public final class SavedFeedActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        theme = ThemePalette.get(this);
+        BG = theme.background;
+        FG = theme.text;
+        MUTED = theme.muted;
+        ACCENT = theme.accent;
+        theme.applyBars(this);
         vaultDir = new File(getFilesDir(), "vault");
         buildScreen();
         String group = getIntent().getStringExtra("group");
@@ -170,12 +175,13 @@ public final class SavedFeedActivity extends Activity {
         root.addView(top, new LinearLayout.LayoutParams(-1, dp(62)));
 
         mediaPane = new FrameLayout(this);
+        mediaPane.setBackgroundColor(0xff0d1410);
         root.addView(mediaPane, new LinearLayout.LayoutParams(-1, 0, 1));
 
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
         bottom.setPadding(dp(16), dp(9), dp(16), dp(17));
-        bottom.setBackgroundColor(0xff171d2a);
+        bottom.setBackgroundColor(theme.card);
         title = text("Your offline videos and images", 15, FG);
         title.setMaxLines(1);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -349,7 +355,7 @@ public final class SavedFeedActivity extends Activity {
         ImageView image = new ImageView(this);
         activeImage = image;
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        image.setBackgroundColor(BG);
+        image.setBackgroundColor(0xff0d1410);
         mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
         image.setOnTouchListener(swipes());
         if (file.getName().endsWith(".gif") && Build.VERSION.SDK_INT >= 28) {
@@ -379,7 +385,7 @@ public final class SavedFeedActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(11), dp(9), dp(11), dp(9));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(0xe91b2233);
+        bg.setColor(0xec19291f);
         bg.setCornerRadius(dp(15));
         panel.setBackground(bg);
 
