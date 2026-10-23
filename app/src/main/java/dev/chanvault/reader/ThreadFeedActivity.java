@@ -67,7 +67,10 @@ public final class ThreadFeedActivity extends Activity {
     private FeedVideoPlayer feedPlayer;
     private PlaybackCache streamCache;
     private boolean preloadEnabled = true;
-    private LinearLayout upNextRow, videoTools;
+    private LinearLayout upNextRow, videoTools, imageTools;
+    private ImageView currentImage;
+    private Button imageFitButton;
+    private boolean imageFilled = false;
     private Button fitButton, preloadButton;
     private final List<LinearLayout> carouselTiles = new ArrayList<>();
     private final List<ImageView> carouselImages = new ArrayList<>();
@@ -300,6 +303,38 @@ public final class ThreadFeedActivity extends Activity {
         toolsLp.topMargin = dp(8);
         toolsLp.bottomMargin = dp(5);
         bottom.addView(videoTools, toolsLp);
+
+        // Still images keep their own minimal controls, outside the media surface.
+        imageTools = new LinearLayout(this);
+        imageTools.setOrientation(LinearLayout.HORIZONTAL);
+        imageTools.setVisibility(View.GONE);
+        imageFitButton = button("Fit entire image", () -> {
+            if (currentImage == null) return;
+            imageFilled = !imageFilled;
+            currentImage.setScaleType(imageFilled ?
+                    ImageView.ScaleType.CENTER_CROP : ImageView.ScaleType.FIT_CENTER);
+            imageFitButton.setText(imageFilled ? "Show full image" : "Fill screen");
+            status.setText(imageFilled ? "Fill view · Image edges may be cropped"
+                    : "Fit view · Whole image visible");
+        });
+        // Default: Fit, never crop without the viewer deliberately requesting Fill.
+        imageFitButton.setText("Fill screen");
+        LinearLayout.LayoutParams imageFitLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        imageFitLp.rightMargin = dp(7);
+        imageTools.addView(imageFitButton, imageFitLp);
+        Button originalImage = button("Open original", () -> {
+            Entry entry = currentEntry();
+            if (entry == null || entry.url == null) return;
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(entry.url))); }
+            catch (Exception ex) { toast("No external image viewer available"); }
+        });
+        LinearLayout.LayoutParams originalImageLp = new LinearLayout.LayoutParams(0, dp(43), 1);
+        originalImageLp.leftMargin = dp(7);
+        imageTools.addView(originalImage, originalImageLp);
+        LinearLayout.LayoutParams imageToolsLp = new LinearLayout.LayoutParams(-1, dp(43));
+        imageToolsLp.topMargin = dp(7);
+        imageToolsLp.bottomMargin = dp(4);
+        bottom.addView(imageTools, imageToolsLp);
 
         heading = text("Loading media...", 15, FG);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -677,6 +712,8 @@ public final class ThreadFeedActivity extends Activity {
         ++viewSerial;
         ui.removeCallbacks(hidePlaybackControls);
         playbackControls = null;
+        currentImage = null;
+        imageFilled = false;
         playbackSeek = null;
         playbackTime = null;
         playbackToggle = null;
@@ -695,6 +732,7 @@ public final class ThreadFeedActivity extends Activity {
             saveButton.setEnabled(false);
             upNextRow.removeAllViews();
             videoTools.setVisibility(View.GONE);
+            imageTools.setVisibility(View.GONE);
             return;
         }
         position = Math.max(0, Math.min(position, list.size() - 1));
@@ -717,6 +755,8 @@ public final class ThreadFeedActivity extends Activity {
         saveButton.setEnabled(current.hasMedia());
         saveButton.setText(current.hasMedia() ? "Save to vault" : "Text only");
         videoTools.setVisibility(current.isVideo() ? View.VISIBLE : View.GONE);
+        imageTools.setVisibility(current.hasMedia() && !current.isVideo() ? View.VISIBLE : View.GONE);
+        imageFitButton.setText("Fill screen");
         fitButton.setText("Fit / Fill");
         status.setText(current.hasMedia()
                 ? "Size: " + formatSize(current.size) + " · Swipe to browse"
@@ -782,6 +822,8 @@ public final class ThreadFeedActivity extends Activity {
         } else {
             ImageView image = new ImageView(this);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            currentImage = image;
+            image.setAdjustViewBounds(false);
             image.setBackgroundColor(BG);
             image.setOnTouchListener(swipe);
             mediaPane.addView(image, new FrameLayout.LayoutParams(-1, -1));
