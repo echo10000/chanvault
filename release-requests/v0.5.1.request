@@ -1,0 +1,3 @@
+Release version: v0.5.1
+Reason: Improve player fit and rotation, accurate buffering progress and media sizes, lazy full-thread carousel, playback cache, and bounded next-video prefetch.
+Distribution: signed GitHub Release APK using permanently pinned certificate.
