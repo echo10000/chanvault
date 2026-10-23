@@ -2,6 +2,9 @@ package dev.chanvault.reader;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
+import android.os.Build;
+import java.nio.ByteBuffer;
 import android.util.LruCache;
 import android.widget.ImageView;
 
@@ -65,7 +68,8 @@ final class MediaThumbs {
                         if (buffer.size() + n > limit) return;
                         buffer.write(bytes, 0, n);
                         if (onPercent != null && transferSize > 0) {
-                            int percent = Math.min(100, (int) (buffer.size() * 100L / transferSize));
+                            // 100% means decoded and renderable, not just transferred.
+                            int percent = Math.min(99, (int) (buffer.size() * 100L / transferSize));
                             if (percent >= lastPercent + 4 || percent == 100) {
                                 lastPercent = percent;
                                 final int loadedPercent = percent;
@@ -86,7 +90,32 @@ final class MediaThumbs {
                         opts.inSampleSize *= 2;
                     }
                     opts.inJustDecodeBounds = false;
-                    loaded = BitmapFactory.decodeByteArray(raw, 0, raw.length, opts);
+                    try {
+                        loaded = BitmapFactory.decodeByteArray(raw, 0, raw.length, opts);
+                    } catch (RuntimeException ignored) {
+                        loaded = null;
+                    }
+                    // Some animated/oddly encoded images fail BitmapFactory even
+                    // though the HTTP transfer succeeded. Try platform decoder.
+                    if (loaded == null && Build.VERSION.SDK_INT >= 28) {
+                        try {
+                            ImageDecoder.Source source = ImageDecoder.createSource(ByteBuffer.wrap(raw));
+                            final int maxEdge = full ? 3200 : 800;
+                            loaded = ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
+                                int width = info.getSize().getWidth();
+                                int height = info.getSize().getHeight();
+                                int largest = Math.max(width, height);
+                                if (largest > maxEdge) {
+                                    float shrink = maxEdge / (float) largest;
+                                    decoder.setTargetSize(Math.max(1, Math.round(width * shrink)),
+                                            Math.max(1, Math.round(height * shrink)));
+                                }
+                                decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+                            });
+                        } catch (Exception ignored) {
+                            loaded = null;
+                        }
+                    }
                 }
                 if (loaded != null) bitmaps.put(url, loaded);
             } catch (Exception ignored) {
@@ -96,7 +125,10 @@ final class MediaThumbs {
                 final Bitmap result = loaded;
                 view.post(() -> {
                     if (!url.equals(view.getTag())) return;
-                    if (result != null) view.setImageBitmap(result);
+                    if (result != null) {
+                        view.setImageBitmap(result);
+                        if (onPercent != null) onPercent.accept(100);
+                    }
                     if (completed != null) completed.accept(result != null);
                 });
             }
