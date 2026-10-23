@@ -19,6 +19,10 @@ An independent, unofficial **Android imageboard reader with a private offline me
 
 **Experimental v0.5:** This is original source code, not a fork of the proprietary Read Chan app. It has not yet been verified on a physical Android device. The UI remains experimental; bookmarks, posting, richer saved-media thumbnails and broader WebM codec support are future work.
 
+## Install the official signed APK
+
+Download [`app-release.apk`](https://github.com/echo10000/chanvault/releases/download/v0.5.0/app-release.apk) directly from GitHub Releases. This is the permanent **ChanVault** app, not the separate experimental Preview build. Android requires confirmation to install. Previous experimental `dev.chanvault.reader` debug builds have an incompatible certificate, so uninstall the old app **only after** checking for private media you need to preserve. Future releases signed with the same key should update in place.
+
 ## ChanVault v0.5
 
 - A collapsible **Up Next** thumbnail tray sits **below**, never over, the playing video.
@@ -29,9 +33,9 @@ An independent, unofficial **Android imageboard reader with a private offline me
 - **Export vault ZIP** and **Restore ZIP** use Android's system picker. ZIPs are explicit exports outside private storage, so protect them and remove unwanted copies. Restore requires an empty vault.
 - Home provides a one-tap **Check for signed updates** control via GitHub Releases.
 
-## Permanent signed releases (one-time setup)
+## Permanent signed releases
 
-The workflow is in `.github/workflows/release-apk.yml`, but **cannot publish until private signing secrets are configured**.
+The first permanent release **[v0.5.0](https://github.com/echo10000/chanvault/releases/tag/v0.5.0)** is published and signed. The key remains outside this public repository in GitHub Actions secrets. Future signed releases must reuse exactly the same key.
 
 Create or securely generate a PKCS#12 keystore with alias `chanvault`. Back up that keystore and its password **outside this public repository**. In GitHub Settings -> Secrets and variables -> Actions, configure:
 
