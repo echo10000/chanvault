@@ -17,6 +17,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Button;
 
 import org.json.JSONObject;
 
@@ -28,6 +29,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -47,6 +50,8 @@ final class SavedLibrary {
     private final Runnable reload;
     private final File vaultDir;
     private int grouping;
+    private boolean selecting = false, deleting = false;
+    private final Set<String> selectedIds = new LinkedHashSet<>();
 
     SavedLibrary(MainActivity host, LinearLayout container, List<JSONObject> source, Runnable reload) {
         this.theme = ThemePalette.get(host);
@@ -87,6 +92,55 @@ final class SavedLibrary {
         heading.setPadding(dp(2), dp(6), dp(2), dp(4));
         container.addView(heading);
         container.addView(text(items.size() + " saved files · Private to this device", 13, SUB, false));
+        addGap(container, 9);
+        LinearLayout manage = new LinearLayout(host);
+        manage.setGravity(Gravity.CENTER_VERTICAL);
+        TextView selectMode = text(selecting ? "Cancel selection" : "Select files", 14, selecting ? TEXT : theme.onAccent, true);
+        selectMode.setGravity(Gravity.CENTER);
+        selectMode.setPadding(dp(12), 0, dp(12), 0);
+        selectMode.setBackground(bg(selecting ? theme.chip : ACCENT, 12));
+        LinearLayout.LayoutParams selectLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+        manage.addView(selectMode, selectLp);
+        selectMode.setOnClickListener(v -> {
+            selecting = !selecting;
+            selectedIds.clear();
+            draw();
+        });
+        if (selecting) {
+            TextView all = text(selectedIds.size() == items.size() ? "Clear all" : "Select all",
+                    14, TEXT, true);
+            all.setGravity(Gravity.CENTER);
+            all.setBackground(bg(theme.chip, 12));
+            LinearLayout.LayoutParams allLp = new LinearLayout.LayoutParams(0, dp(46), 1);
+            allLp.leftMargin = dp(9);
+            manage.addView(all, allLp);
+            all.setOnClickListener(v -> {
+                if (selectedIds.size() == items.size()) selectedIds.clear();
+                else {
+                    selectedIds.clear();
+                    for (JSONObject row : items) selectedIds.add(row.optString("id"));
+                }
+                draw();
+            });
+        }
+        container.addView(manage);
+        if (selecting) {
+            LinearLayout selectedActions = new LinearLayout(host);
+            selectedActions.setGravity(Gravity.CENTER_VERTICAL);
+            TextView count = text(selectedIds.size() + " selected", 13, SUB, true);
+            selectedActions.addView(count, new LinearLayout.LayoutParams(0, dp(49), 1));
+            TextView delete = text("Delete selected (" + selectedIds.size() + ")", 14,
+                    selectedIds.isEmpty() ? SUB : 0xffffe2e2, true);
+            delete.setGravity(Gravity.CENTER);
+            delete.setPadding(dp(10), 0, dp(10), 0);
+            delete.setBackground(bg(selectedIds.isEmpty() ? theme.chip : 0xff8e3748, 12));
+            selectedActions.addView(delete, new LinearLayout.LayoutParams(0, dp(46), 2));
+            delete.setEnabled(!selectedIds.isEmpty() && !deleting);
+            delete.setOnClickListener(v -> confirmBulkDelete());
+            LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(-1, -2);
+            actionsLp.topMargin = dp(9);
+            container.addView(selectedActions, actionsLp);
+        }
         addGap(container, 12);
 
         LinearLayout chooser = new LinearLayout(host);
@@ -107,7 +161,7 @@ final class SavedLibrary {
         }
         container.addView(chooser);
         addGap(container, 10);
-        if (!items.isEmpty()) {
+        if (!items.isEmpty() && !selecting) {
             TextView watchAll = text("▶  Swipe through all saved media", 14, theme.onAccent, true);
             watchAll.setGravity(Gravity.CENTER);
             watchAll.setBackground(bg(ACCENT, 12));
@@ -131,18 +185,32 @@ final class SavedLibrary {
         }
 
         Map<String, List<JSONObject>> groups = new LinkedHashMap<>();
+        Map<String, String> groupNames = new LinkedHashMap<>();
         for (JSONObject item : items) {
             String board = item.optString("board", "?");
             long thread = item.optLong("thread", 0);
-            String key = grouping == 0 ? "/" + board + "/  ·  Thread #" + thread :
-                    grouping == 1 ? "/" + board + "/  ·  Board" : "Recently saved";
+            String key = grouping == 0 ? ThreadTitles.groupKey(board, thread) :
+                    grouping == 1 ? "board:" + board : "recent";
             if (!groups.containsKey(key)) groups.put(key, new ArrayList<>());
             groups.get(key).add(item);
+            if (grouping == 0) {
+                String candidate = ThreadTitles.clean(item.optString("threadTitle", ""));
+                if (!candidate.isEmpty() && !groupNames.containsKey(key)) groupNames.put(key, candidate);
+            }
         }
         for (Map.Entry<String, List<JSONObject>> group : groups.entrySet()) {
             LinearLayout sectionHeader = new LinearLayout(host);
             sectionHeader.setGravity(Gravity.CENTER_VERTICAL);
-            TextView title = text(group.getKey(), 16, TEXT, true);
+            String titleString;
+            if (grouping == 0) {
+                String titleText = groupNames.get(group.getKey());
+                if (titleText == null || titleText.isEmpty()) titleText = "Untitled thread";
+                JSONObject first = group.getValue().get(0);
+                titleString = titleText + "  ·  /" + first.optString("board", "?") + "/";
+            } else if (grouping == 1) {
+                titleString = "/" + group.getValue().get(0).optString("board", "?") + "/ · Board";
+            } else titleString = "Recently saved";
+            TextView title = text(titleString, 16, TEXT, true);
             title.setSingleLine(true);
             title.setEllipsize(TextUtils.TruncateAt.END);
             sectionHeader.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
@@ -162,7 +230,9 @@ final class SavedLibrary {
             container.addView(horizontal);
             addGap(container, 18);
         }
-        TextView hint = text("Tap to swipe through this group · Long-press to delete", 12, SUB, false);
+        TextView hint = text(selecting
+                ? "Tap thumbnails to select · Deletion requires confirmation"
+                : "Tap to swipe through this group · Long-press to delete", 12, SUB, false);
         hint.setGravity(Gravity.CENTER_HORIZONTAL);
         hint.setPadding(dp(4), dp(8), dp(4), dp(24));
         container.addView(hint);
@@ -197,6 +267,19 @@ final class SavedLibrary {
         typeLp.leftMargin = dp(6);
         typeLp.bottomMargin = dp(6);
         imageHolder.addView(type, typeLp);
+        TextView marked = text("✓ Selected", 11, 0xff172618, true);
+        marked.setGravity(Gravity.CENTER);
+        marked.setBackground(bg(ACCENT, 8));
+        FrameLayout.LayoutParams markLp = new FrameLayout.LayoutParams(-2, dp(26),
+                Gravity.TOP | Gravity.RIGHT);
+        markLp.topMargin = dp(6);
+        markLp.rightMargin = dp(6);
+        marked.setPadding(dp(7), 0, dp(7), 0);
+        marked.setVisibility(selecting && selectedIds.contains(row.optString("id"))
+                ? View.VISIBLE : View.GONE);
+        imageHolder.addView(marked, markLp);
+        if (selecting && selectedIds.contains(row.optString("id")))
+            tile.setBackground(bg(theme.chip, 14));
 
         TextView label = text(row.optString("title", "Saved media"), 11, TEXT, false);
         label.setMaxLines(2);
@@ -205,6 +288,13 @@ final class SavedLibrary {
         tile.addView(label);
         imageHolder.setContentDescription("Open " + row.optString("title", "saved media"));
         tile.setOnClickListener(v -> {
+            if (selecting) {
+                String id = row.optString("id", "");
+                if (selectedIds.contains(id)) selectedIds.remove(id);
+                else if (!id.isEmpty()) selectedIds.add(id);
+                draw();
+                return;
+            }
             Intent intent = new Intent(host, SavedFeedActivity.class);
             intent.putExtra("file", fileName);
             intent.putExtra("group", grouping == 0 ? "thread" : grouping == 1 ? "board" : "recent");
@@ -213,6 +303,10 @@ final class SavedLibrary {
             host.startActivity(intent);
         });
         tile.setOnLongClickListener(v -> {
+            if (selecting) {
+                tile.performClick();
+                return true;
+            }
             new AlertDialog.Builder(host)
                     .setTitle("Delete saved media?")
                     .setMessage(row.optString("title") + "\n\nThis only removes the private local copy.")
@@ -231,6 +325,51 @@ final class SavedLibrary {
             return true;
         });
         loadThumbnail(file, image, isVideo);
+    }
+
+    private void confirmBulkDelete() {
+        if (selectedIds.isEmpty() || deleting) return;
+        final Set<String> targets = new LinkedHashSet<>(selectedIds);
+        long bytes = 0;
+        for (JSONObject row : items) {
+            if (!targets.contains(row.optString("id"))) continue;
+            File file = new File(vaultDir, row.optString("file"));
+            if (file.isFile()) bytes += file.length();
+        }
+        String total = bytes >= 1024 * 1024 ?
+                String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0)) :
+                String.format(Locale.US, "%.0f KB", bytes / 1024.0);
+        new AlertDialog.Builder(host)
+                .setTitle("Delete " + targets.size() + " saved files?")
+                .setMessage("This will permanently remove " + targets.size()
+                        + " selected files (" + total + ") from the private vault. "
+                        + "Unselected downloads are preserved. This cannot be undone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete files", (d, w) -> {
+                    deleting = true;
+                    THUMBS.execute(() -> {
+                        try {
+                            int removed = new MainActivity.Vault(vaultDir).deleteMany(targets);
+                            host.runOnUiThread(() -> {
+                                deleting = false;
+                                selectedIds.clear();
+                                selecting = false;
+                                android.widget.Toast.makeText(host,
+                                        "Deleted " + removed + " saved files",
+                                        android.widget.Toast.LENGTH_LONG).show();
+                                reload.run();
+                            });
+                        } catch (Exception ex) {
+                            host.runOnUiThread(() -> {
+                                deleting = false;
+                                android.widget.Toast.makeText(host,
+                                        "Could not delete files. Your library is unchanged.",
+                                        android.widget.Toast.LENGTH_LONG).show();
+                                draw();
+                            });
+                        }
+                    });
+                }).show();
     }
 
     private void loadThumbnail(File file, ImageView image, boolean video) {
