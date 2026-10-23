@@ -47,8 +47,9 @@ import java.util.concurrent.Executors;
  * Media is stored ONLY inside Android's private application files directory.
  */
 public final class MainActivity extends Activity {
-    private static final int BG = 0xff101116, PANEL = 0xff1e2028;
-    private static final int TEXT = 0xfff1f2f7, MUTED = 0xffa7acbe, ACCENT = 0xff9dabff;
+    private static int BG = 0xff102019, PANEL = 0xff172b21;
+    private static int TEXT = 0xfff8f5e6, MUTED = 0xffb6ceb9, ACCENT = 0xffb5e077;
+    private ThemePalette theme;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
     private LinearLayout body;
@@ -61,8 +62,13 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        theme = ThemePalette.get(this);
+        BG = theme.background;
+        PANEL = theme.card;
+        TEXT = theme.text;
+        MUTED = theme.muted;
+        ACCENT = theme.accent;
+        theme.applyBars(this);
         vault = new Vault(new File(getFilesDir(), "vault"));
         threadShelf = new ThreadShelf(this);
         shownShelfRevision = threadShelf.revision();
@@ -118,12 +124,12 @@ public final class MainActivity extends Activity {
         boolean active = ("Browse".equals(text) && !"saved".equals(page))
                 || ("Saved Media".equals(text) && "saved".equals(page))
                 || "Save privately".equals(text) || "Open board".equals(text);
-        b.setTextColor(active ? BG : TEXT);
+        b.setTextColor(active ? theme.onAccent : TEXT);
         android.graphics.drawable.GradientDrawable background =
                 new android.graphics.drawable.GradientDrawable();
-        background.setColor(active ? ACCENT : 0xff292f3f);
+        background.setColor(active ? ACCENT : theme.chip);
         background.setCornerRadius(dp(14));
-        if (!active) background.setStroke(dp(1), 0xff394256);
+        if (!active) background.setStroke(dp(1), theme.border);
         b.setBackground(background);
         b.setMinHeight(0);
         b.setMinimumHeight(0);
@@ -137,7 +143,7 @@ public final class MainActivity extends Activity {
                     "Browse".equals(text) ? R.drawable.ic_posts : R.drawable.ic_download);
             if (d != null) {
                 d = d.mutate();
-                d.setTint(active ? BG : TEXT);
+                d.setTint(active ? theme.onAccent : TEXT);
                 d.setBounds(0, 0, dp(17), dp(17));
                 b.setCompoundDrawables(d, null, null, null);
                 b.setCompoundDrawablePadding(dp(6));
@@ -287,8 +293,22 @@ public final class MainActivity extends Activity {
 
     private void home() {
         shell("Discover", "home");
+        TextView look = label("✿  Appearance", 18, TEXT);
+        look.setPadding(dp(3), dp(7), dp(3), dp(8));
+        body.addView(look);
+        LinearLayout themes = new LinearLayout(this);
+        LinearLayout.LayoutParams themeLp = new LinearLayout.LayoutParams(0, dp(49), 1);
+        themeLp.rightMargin = dp(6);
+        themes.addView(button("Theme: " + (theme.index < 2 ? "Yotsuba" :
+                        theme.index == 2 ? "Midnight" : "Sakura"), this::pickTheme), themeLp);
+        LinearLayout.LayoutParams accentLp = new LinearLayout.LayoutParams(0, dp(49), 1);
+        accentLp.leftMargin = dp(6);
+        themes.addView(button("Accent: " + (theme.accentIndex == 0 ? "Default" :
+                        ThemePalette.ACCENTS[theme.accentIndex]), this::pickAccent), accentLp);
+        body.addView(themes);
+        spacing(10);
         body.addView(button("Check for signed updates", () -> UpdateChecker.check(this)));
-        spacing(9);
+        spacing(12);
         showPinnedThreads();
         android.content.SharedPreferences resumePrefs = getSharedPreferences("watch_resume_v1", MODE_PRIVATE);
         String lastBoard = resumePrefs.getString("latest_board", "");
@@ -309,6 +329,30 @@ public final class MainActivity extends Activity {
         home.render(board);
     }
 
+    private void pickTheme() {
+        new AlertDialog.Builder(this)
+                .setTitle("Choose ChanVault theme")
+                .setSingleChoiceItems(ThemePalette.THEMES, theme.index, (dialog, choice) -> {
+                    ThemePalette.chooseTheme(this, choice);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void pickAccent() {
+        new AlertDialog.Builder(this)
+                .setTitle("Choose highlight color")
+                .setSingleChoiceItems(ThemePalette.ACCENTS, theme.accentIndex, (dialog, choice) -> {
+                    ThemePalette.chooseAccent(this, choice);
+                    dialog.dismiss();
+                    recreate();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void showPinnedThreads() {
         List<ThreadShelf.Item> pins = threadShelf.pinned();
         TextView heading = label("Pinned threads", 19, TEXT);
@@ -323,7 +367,7 @@ public final class MainActivity extends Activity {
                 panel.setPadding(dp(11), dp(11), dp(11), dp(11));
                 android.graphics.drawable.GradientDrawable bg =
                         new android.graphics.drawable.GradientDrawable();
-                bg.setColor(0xff202637);
+                bg.setColor(theme.card);
                 bg.setCornerRadius(dp(16));
                 panel.setBackground(bg);
                 if (!item.thumbnail.isEmpty()) {
@@ -505,7 +549,7 @@ public final class MainActivity extends Activity {
         TextView queue = label(DownloadService.progress(this), 13, MUTED);
         queue.setPadding(dp(14), dp(12), dp(14), dp(12));
         android.graphics.drawable.GradientDrawable queueBg = new android.graphics.drawable.GradientDrawable();
-        queueBg.setColor(0xff252c3e);
+        queueBg.setColor(theme.card);
         queueBg.setCornerRadius(dp(13));
         queue.setBackground(queueBg);
         body.addView(queue);
@@ -523,7 +567,7 @@ public final class MainActivity extends Activity {
                     body.removeAllViews();
                     TextView progress = label(DownloadService.progress(this), 12, MUTED);
                     progress.setPadding(dp(12), dp(12), dp(12), dp(12));
-                    progress.setBackgroundColor(0xff252c3e);
+                    progress.setBackgroundColor(theme.card);
                     body.addView(progress);
                     LinearLayout actions = new LinearLayout(this);
                     LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(46), 1);
