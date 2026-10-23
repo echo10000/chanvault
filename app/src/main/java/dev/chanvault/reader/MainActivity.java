@@ -116,7 +116,7 @@ public final class MainActivity extends Activity {
         panel.setBackgroundColor(PANEL);
         panel.addView(label(title, 17, TEXT));
         if (detail != null && !detail.isEmpty()) panel.addView(label(detail, 13, MUTED));
-        if (action != null) panel.addView(button("Open →", action));
+        if (action != null) panel.addView(button("Open", action));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(10);
         body.addView(panel, lp);
@@ -161,7 +161,7 @@ public final class MainActivity extends Activity {
         desc.setMaxLines(3);
         desc.setEllipsize(android.text.TextUtils.TruncateAt.END);
         info.addView(desc);
-        info.addView(label("Explore feed  ↗", 12, ACCENT));
+        info.addView(label("Explore feed", 12, ACCENT));
         tile.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
@@ -201,25 +201,15 @@ public final class MainActivity extends Activity {
     }
 
     private void home() {
-        shell("Browse", "home");
-        card("Private media vault", "Save WebM, MP4, GIF and images without adding them to your Gallery.", null);
-        EditText entry = new EditText(this);
-        entry.setSingleLine(true);
-        entry.setText("/" + board + "/");
-        entry.setHint("Board name, e.g. /g/");
-        entry.setTextColor(TEXT);
-        body.addView(entry);
-        body.addView(button("Open board", () -> {
-            try { catalog(validateBoard(entry.getText().toString())); }
-            catch (Exception e) { toast(e.getMessage()); }
-        }));
-        spacing(8);
-        body.addView(label("Quick boards", 17, MUTED));
-        for (String name : new String[]{"g", "wg", "w", "a", "v", "gif"}) {
-            body.addView(button("/" + name + "/  →", () -> catalog(name)));
-        }
-        spacing(20);
-        body.addView(label("Unofficial, read-only reader. Board content may be sensitive.", 12, MUTED));
+        shell("Discover", "home");
+        final int visibleGeneration = generation;
+        BoardsHome home = new BoardsHome(this, body, new BoardsHome.Navigator() {
+            @Override public void board(String requestedBoard) { catalog(requestedBoard); }
+            @Override public void thread(String requestedBoard, long threadId) {
+                openFeed(requestedBoard, threadId, 0);
+            }
+        }, () -> generation == visibleGeneration && !isFinishing() && !isDestroyed());
+        home.render(board);
     }
 
     private static String validateBoard(String raw) {
@@ -275,7 +265,7 @@ public final class MainActivity extends Activity {
                 ui.post(() -> {
                     if (ticket != generation) return;
                     body.removeAllViews();
-                    body.addView(button("← Back to /" + b + "/", () -> catalog(b)));
+                    body.addView(button("Back to /" + b + "/", () -> catalog(b)));
                     for (int i = 0; i < posts.length(); i++) {
                         JSONObject post = posts.optJSONObject(i);
                         if (post == null) continue;
@@ -291,9 +281,9 @@ public final class MainActivity extends Activity {
                         if (display.length() > 100) display = display.substring(0, 100);
                         String name = display;
                         body.addView(label("Attachment: " + display, 13, MUTED));
-                        Button download = button("↓ Save privately", () -> download(mediaUrl, name, b, id));
+                        Button download = button("Save privately", () -> download(mediaUrl, name, b, id));
                         body.addView(download);
-                        body.addView(button("▶ Preview in swipe feed", () -> openFeed(b, id, postId)));
+                        body.addView(button("Preview in swipe feed", () -> openFeed(b, id, postId)));
                         body.addView(button("Open original media in browser", () -> {
                             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(mediaUrl));
                             startActivity(intent);
@@ -331,7 +321,7 @@ public final class MainActivity extends Activity {
                         String file = item.optString("file");
                         String title = item.optString("title", "Saved media");
                         card(title, "/" + item.optString("board") + "/ · " + (item.optLong("size") / 1024) + " KB", null);
-                        body.addView(button("▶ Play offline", () -> {
+                        body.addView(button("Play offline", () -> {
                             Intent intent = new Intent(this, Player.class);
                             intent.putExtra("file", file);
                             startActivity(intent);
@@ -509,7 +499,7 @@ public final class MainActivity extends Activity {
             root.setOrientation(LinearLayout.VERTICAL);
             root.setBackgroundColor(BG);
             Button back = new Button(this);
-            back.setText("← Back");
+            back.setText("Back");
             back.setOnClickListener(v -> finish());
             root.addView(back);
             String name = getIntent().getStringExtra("file");
