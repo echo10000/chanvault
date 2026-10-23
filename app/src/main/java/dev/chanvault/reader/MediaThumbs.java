@@ -25,6 +25,12 @@ final class MediaThumbs {
 
     static void load(ImageView view, String url, boolean full,
                      java.util.function.Consumer<Boolean> completed) {
+        load(view, url, full, completed, null);
+    }
+
+    static void load(ImageView view, String url, boolean full,
+                     java.util.function.Consumer<Boolean> completed,
+                     java.util.function.IntConsumer onPercent) {
         view.setTag(url);
         view.setImageDrawable(null);
         if (url == null || !url.matches(
@@ -34,6 +40,7 @@ final class MediaThumbs {
         Bitmap cached = bitmaps.get(url);
         if (cached != null) {
             view.setImageBitmap(cached);
+            if (onPercent != null) onPercent.accept(100);
             if (completed != null) completed.accept(true);
             return;
         }
@@ -52,9 +59,21 @@ final class MediaThumbs {
                      ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
                     byte[] bytes = new byte[8192];
                     int n;
+                    int lastPercent = -1;
+                    long transferSize = connection.getContentLengthLong();
                     while ((n = stream.read(bytes)) != -1) {
                         if (buffer.size() + n > limit) return;
                         buffer.write(bytes, 0, n);
+                        if (onPercent != null && transferSize > 0) {
+                            int percent = Math.min(100, (int) (buffer.size() * 100L / transferSize));
+                            if (percent >= lastPercent + 4 || percent == 100) {
+                                lastPercent = percent;
+                                final int loadedPercent = percent;
+                                view.post(() -> {
+                                    if (url.equals(view.getTag())) onPercent.accept(loadedPercent);
+                                });
+                            }
+                        }
                     }
                     byte[] raw = buffer.toByteArray();
                     BitmapFactory.Options opts = new BitmapFactory.Options();
