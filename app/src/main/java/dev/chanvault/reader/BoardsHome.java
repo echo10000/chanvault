@@ -65,6 +65,7 @@ final class BoardsHome {
     private final Navigator navigation;
     private final BooleanSupplier stillVisible;
     private final SharedPreferences preferences;
+    private final ThreadShelf threadShelf;
     private final Set<String> favorites = new LinkedHashSet<>();
     private LinearLayout favoriteContent;
     private String currentBoard;
@@ -82,6 +83,7 @@ final class BoardsHome {
         this.navigation = navigation;
         this.stillVisible = stillVisible;
         this.preferences = activity.getSharedPreferences("boards_home_v1", Context.MODE_PRIVATE);
+        this.threadShelf = new ThreadShelf(activity);
         for (String board : preferences.getStringSet("favorites", Collections.emptySet())) {
             if (valid(board)) favorites.add(board);
         }
@@ -240,6 +242,7 @@ final class BoardsHome {
 
         Spotlight cached;
         synchronized (CACHE) { cached = CACHE.get(board); }
+        if (cached != null && threadShelf.isBlocked(board, cached.id)) cached = null;
         if (cached != null && System.currentTimeMillis() - cached.fetchedAt < 180000) {
             applySpotlight(board, cached, eyebrow, threadTitle, threadMeta, image, watch);
             return;
@@ -273,6 +276,14 @@ final class BoardsHome {
     private void applySpotlight(String board, Spotlight s,
                                 TextView eyebrow, TextView threadTitle, TextView meta,
                                 ImageView thumbnail, TextView watch) {
+        if (threadShelf.isBlocked(board, s.id)) {
+            eyebrow.setText("HIDDEN THREAD");
+            threadTitle.setText("Explore other threads on this board");
+            meta.setText("This highlight was blocked");
+            watch.setEnabled(false);
+            watch.setAlpha(.5f);
+            return;
+        }
         eyebrow.setText("ACTIVE THREAD  \u00b7  " + s.replies + " REPLIES");
         threadTitle.setText(s.title);
         meta.setText(s.summary.isEmpty() ? "Tap to preview its posts and media" : s.summary);
@@ -282,7 +293,7 @@ final class BoardsHome {
         watch.setOnClickListener(v -> { rememberRecent(board); navigation.thread(board, s.id); });
     }
 
-    private static Spotlight loadSpotlight(String board) throws Exception {
+    private Spotlight loadSpotlight(String board) throws Exception {
         long pause = 1150 - (System.currentTimeMillis() - lastRequestAt);
         if (pause > 0) Thread.sleep(pause);
         lastRequestAt = System.currentTimeMillis();
@@ -315,7 +326,8 @@ final class BoardsHome {
                 for (int i = 0; i < threads.length(); i++) {
                     JSONObject item = threads.optJSONObject(i);
                     if (item == null || item.optInt("sticky") == 1 ||
-                        item.optInt("closed") == 1 || item.optLong("no") <= 0) continue;
+                        item.optInt("closed") == 1 || item.optLong("no") <= 0 ||
+                        threadShelf.isBlocked(board, item.optLong("no"))) continue;
                     String tim = item.optString("tim", "");
                     if (!tim.matches("[0-9]{5,24}")) continue;
                     int replies = item.optInt("replies", 0);
