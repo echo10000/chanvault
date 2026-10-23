@@ -6,8 +6,8 @@ android {
         applicationId 'dev.chanvault.reader'
         minSdk 26
         targetSdk 34
-        versionCode 5
-        versionName '0.5.0'
+        versionCode 6
+        versionName '0.5.1'
         manifestPlaceholders = [appDisplayName: 'ChanVault']
     }
     // Signed releases use a keystore held in GitHub Actions Secrets,
@@ -44,4 +44,13 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+// Media3 shares cached bytes across swipes to avoid rebuffering already watched clips.
+dependencies {
+    def media3 = '1.11.1'
+    implementation "androidx.media3:media3-exoplayer:$media3"
+    implementation "androidx.media3:media3-ui:$media3"
+    implementation "androidx.media3:media3-datasource:$media3"
+    implementation "androidx.media3:media3-database:$media3"
 }
