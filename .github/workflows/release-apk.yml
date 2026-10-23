@@ -44,6 +44,22 @@ jobs:
           fi
           printf '%s' "$CHANVAULT_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/chanvault-release.p12"
           chmod 600 "$RUNNER_TEMP/chanvault-release.p12"
+      - name: Verify permanent signing certificate
+        env:
+          CHANVAULT_SIGNING_PASSWORD: "${{ secrets.CHANVAULT_SIGNING_PASSWORD }}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERT_SHA="$(keytool -list -v -storetype PKCS12 \
+            -keystore "$RUNNER_TEMP/chanvault-release.p12" \
+            -storepass "$CHANVAULT_SIGNING_PASSWORD" \
+            -alias chanvault | sed -n 's/.*SHA256: //p' | head -n 1)"
+          EXPECTED_SHA="E9:91:1B:51:FD:E4:32:FF:13:AD:D4:6F:61:07:FB:6C:6F:DF:A4:D0:7E:D9:AA:F6:1B:35:F5:52:F4:95:CA:8D"
+          if [ "$CERT_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Incorrect signing key. Use the permanent ChanVault signing kit; release blocked."
+            exit 1
+          fi
+          echo "Verified permanent signing identity."
       - name: Build release APK
         env:
           CHANVAULT_KEYSTORE_PATH: "${{ runner.temp }}/chanvault-release.p12"
@@ -53,6 +69,23 @@ jobs:
         run: |
           set -euo pipefail
           "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+      - name: Confirm release version matches tag
+        env:
+          REQUESTED_TAG: "${{ inputs.tag }}"
+          REF_NAME: "${{ github.ref_name }}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${REQUESTED_TAG:-$REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version tag: $TAG"
+            exit 1
+          fi
+          EXPECTED="v$(sed -n \"s/.*versionName '\\([^']*\\)'.*/\\1/p\" app/build.gradle | head -n 1)"
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "::error::Release tag $TAG does not match Android version $EXPECTED."
+            exit 1
+          fi
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
