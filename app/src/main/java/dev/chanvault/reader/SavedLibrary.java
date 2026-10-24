@@ -2,6 +2,7 @@ package dev.chanvault.reader;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.widget.EditText;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -49,6 +50,7 @@ final class SavedLibrary {
     private final List<JSONObject> items;
     private final Runnable reload;
     private final File vaultDir;
+    private final android.content.SharedPreferences renamePrefs;
     private int grouping;
     private boolean selecting = false, deleting = false;
     private final Set<String> selectedIds = new LinkedHashSet<>();
@@ -64,6 +66,7 @@ final class SavedLibrary {
         this.items = new ArrayList<>(source);
         this.reload = reload;
         this.vaultDir = new File(host.getFilesDir(), "vault");
+        this.renamePrefs = host.getSharedPreferences("saved_thread_titles_v1", 0);
         this.grouping = host.getSharedPreferences("saved_view", 0).getInt("group", 0);
         Collections.sort(items, (a, b) -> Long.compare(b.optLong("savedAt"), a.optLong("savedAt")));
     }
@@ -202,19 +205,52 @@ final class SavedLibrary {
             LinearLayout sectionHeader = new LinearLayout(host);
             sectionHeader.setGravity(Gravity.CENTER_VERTICAL);
             String titleString;
+            JSONObject first = group.getValue().get(0);
             if (grouping == 0) {
-                String titleText = groupNames.get(group.getKey());
-                if (titleText == null || titleText.isEmpty()) titleText = "Untitled thread";
-                JSONObject first = group.getValue().get(0);
-                titleString = titleText + "  ·  /" + first.optString("board", "?") + "/";
+                String discovered = groupNames.get(group.getKey());
+                String chosen = renamePrefs.getString(group.getKey(), "");
+                titleString = ThreadTitles.display(chosen, discovered);
             } else if (grouping == 1) {
-                titleString = "/" + group.getValue().get(0).optString("board", "?") + "/ · Board";
+                titleString = "/" + first.optString("board", "?") + "/ · Saved media";
             } else titleString = "Recently saved";
+
+            LinearLayout textGroup = new LinearLayout(host);
+            textGroup.setOrientation(LinearLayout.VERTICAL);
             TextView title = text(titleString, 16, TEXT, true);
-            title.setSingleLine(true);
+            title.setMaxLines(2);
             title.setEllipsize(TextUtils.TruncateAt.END);
-            sectionHeader.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-            sectionHeader.addView(text(group.getValue().size() + " files", 12, ACCENT, false));
+            textGroup.addView(title);
+            if (grouping == 0)
+                textGroup.addView(text("/" + first.optString("board", "?") + "/  ·  Thread #"
+                        + first.optLong("thread", 0), 11, SUB, false));
+            sectionHeader.addView(textGroup, new LinearLayout.LayoutParams(0, -2, 1));
+
+            LinearLayout groupTools = new LinearLayout(host);
+            groupTools.setOrientation(LinearLayout.VERTICAL);
+            TextView filesCount = text(group.getValue().size() + " files", 12, ACCENT, false);
+            filesCount.setGravity(Gravity.RIGHT);
+            groupTools.addView(filesCount);
+            TextView groupAction = text(selecting ? "Select group" : "Rename", 12, ACCENT, true);
+            groupAction.setPadding(dp(9), dp(8), 0, dp(6));
+            groupAction.setGravity(Gravity.RIGHT);
+            if (!selecting && grouping != 0) groupAction.setVisibility(View.GONE);
+            groupAction.setOnClickListener(v -> {
+                if (selecting) {
+                    boolean entirelySelected = true;
+                    for (JSONObject row : group.getValue())
+                        if (!selectedIds.contains(row.optString("id"))) entirelySelected = false;
+                    for (JSONObject row : group.getValue()) {
+                        String selectedId = row.optString("id");
+                        if (entirelySelected) selectedIds.remove(selectedId);
+                        else selectedIds.add(selectedId);
+                    }
+                    draw();
+                } else if (grouping == 0) {
+                    askRenameThread(group.getKey(), title.getText().toString());
+                }
+            });
+            groupTools.addView(groupAction);
+            sectionHeader.addView(groupTools);
             container.addView(sectionHeader);
             addGap(container, 8);
 
@@ -231,11 +267,43 @@ final class SavedLibrary {
             addGap(container, 18);
         }
         TextView hint = text(selecting
-                ? "Tap thumbnails to select · Deletion requires confirmation"
-                : "Tap to swipe through this group · Long-press to delete", 12, SUB, false);
+                ? "Tap thumbnails or Select group · Confirm before deleting"
+                : "Tap to swipe through a group · Long-press to delete or Select files above", 12, SUB, false);
         hint.setGravity(Gravity.CENTER_HORIZONTAL);
         hint.setPadding(dp(4), dp(8), dp(4), dp(24));
         container.addView(hint);
+    }
+
+    private void askRenameThread(String groupKey, String existingTitle) {
+        EditText input = new EditText(host);
+        String saved = renamePrefs.getString(groupKey, "");
+        if (!saved.isEmpty()) input.setText(saved);
+        else if (!"Untitled thread".equals(existingTitle)) input.setText(existingTitle);
+        input.setHint("Thread subject or caption");
+        input.setSingleLine(true);
+        input.setSelectAllOnFocus(true);
+        int padding = dp(17);
+        LinearLayout wrapper = new LinearLayout(host);
+        wrapper.setPadding(padding, dp(8), padding, 0);
+        wrapper.addView(input, new LinearLayout.LayoutParams(-1, -2));
+        new AlertDialog.Builder(host).setTitle("Rename saved thread")
+                .setMessage("This changes only the name in your private library, not any downloaded files.")
+                .setView(wrapper)
+                .setNegativeButton("Cancel", null)
+                .setNeutralButton("Reset name", (d, w) -> {
+                    renamePrefs.edit().remove(groupKey).apply();
+                    draw();
+                })
+                .setPositiveButton("Save", (d, w) -> {
+                    String chosen = ThreadTitles.clean(input.getText().toString());
+                    if (chosen.isEmpty()) {
+                        android.widget.Toast.makeText(host, "Please enter a thread title",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    renamePrefs.edit().putString(groupKey, chosen).apply();
+                    draw();
+                }).show();
     }
 
     private void addMediaTile(LinearLayout strip, JSONObject row) {
