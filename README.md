@@ -1,3 +1,9 @@
+## v0.5.5 — collapsible media controls
+
+The thread feed starts in **focus mode**, giving almost all available space to the current video or image. Only a compact bottom handle stays visible. **Swipe up on the handle** (or tap it) to open the full carousel, Fit/Rotate/Preload controls, post details, and private download buttons. **Swipe down on the handle** or tap again to hide them. If controls are taller than the available space they scroll inside the panel. Selecting a media item or swiping to another post returns to the compact layout.
+
+The expanding panel lives **below** the player: video remains centered and preserves its original aspect ratio via Media3 Fit mode. The existing player is not recreated when the panel is opened or closed. An explicit Fill action remains the only way to crop the frame; rotation is recalculated after the viewport changes. This gesture does not interfere with vertical swipes performed on the main video.
+
 ## ChanVault v0.5.5 — image resilience, board pins and safer saved-media management
 
 - **No empty image panel when possible:** If an original image is unavailable or the Android decoder rejects it, the feed automatically tries its 4chan thumbnail. The footer distinguishes a thumbnail fallback from a full image. If both URLs fail, Retry and Open original remain available.
