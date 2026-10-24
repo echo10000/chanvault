@@ -51,6 +51,15 @@ final class FeedVideoPlayer {
                 .inflate(R.layout.feed_video_player, parent, false);
         view.setUseController(false);
         view.setResizeMode(AspectRatioFrameLayout.RESIZE_MODE_FIT);
+        // Sheet expansion changes the viewport, not the stream or player.
+        // Recalculate any user-requested 90° rotation after layout changes.
+        view.addOnLayoutChangeListener((v, left, top, right, bottom,
+                                        oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (!released && ((right - left) != (oldRight - oldLeft) ||
+                    (bottom - top) != (oldBottom - oldTop))) {
+                view.post(this::applyRotation);
+            }
+        });
         parent.addView(view, new FrameLayout.LayoutParams(-1, -1));
 
         DefaultMediaSourceFactory mediaFactory = new DefaultMediaSourceFactory(cache.sourceFactory());
