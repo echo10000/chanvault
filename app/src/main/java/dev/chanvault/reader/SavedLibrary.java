@@ -89,6 +89,15 @@ final class SavedLibrary {
         return v;
     }
 
+    // Keep the user's place when selecting files in a long saved-media library.
+    private void redrawPreservingScroll() {
+        android.widget.ScrollView scroll = container.getParent() instanceof android.widget.ScrollView
+                ? (android.widget.ScrollView) container.getParent() : null;
+        int y = scroll == null ? 0 : scroll.getScrollY();
+        draw();
+        if (scroll != null) scroll.post(() -> scroll.scrollTo(0, y));
+    }
+
     void draw() {
         container.removeAllViews();
         TextView heading = text("Your offline collection", 22, TEXT, true);
@@ -107,7 +116,7 @@ final class SavedLibrary {
         selectMode.setOnClickListener(v -> {
             selecting = !selecting;
             selectedIds.clear();
-            draw();
+            redrawPreservingScroll();
         });
         if (selecting) {
             TextView all = text(selectedIds.size() == items.size() ? "Clear all" : "Select all",
@@ -123,7 +132,7 @@ final class SavedLibrary {
                     selectedIds.clear();
                     for (JSONObject row : items) selectedIds.add(row.optString("id"));
                 }
-                draw();
+                redrawPreservingScroll();
             });
         }
         container.addView(manage);
@@ -244,7 +253,7 @@ final class SavedLibrary {
                         if (entirelySelected) selectedIds.remove(selectedId);
                         else selectedIds.add(selectedId);
                     }
-                    draw();
+                    redrawPreservingScroll();
                 } else if (grouping == 0) {
                     askRenameThread(group.getKey(), title.getText().toString());
                 }
@@ -360,7 +369,7 @@ final class SavedLibrary {
                 String id = row.optString("id", "");
                 if (selectedIds.contains(id)) selectedIds.remove(id);
                 else if (!id.isEmpty()) selectedIds.add(id);
-                draw();
+                redrawPreservingScroll();
                 return;
             }
             Intent intent = new Intent(host, SavedFeedActivity.class);
