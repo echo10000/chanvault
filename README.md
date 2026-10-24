@@ -1,3 +1,11 @@
+## ChanVault v0.5.5 — image resilience, board pins and safer saved-media management
+
+- **No empty image panel when possible:** If an original image is unavailable or the Android decoder rejects it, the feed automatically tries its 4chan thumbnail. The footer distinguishes a thumbnail fallback from a full image. If both URLs fail, Retry and Open original remain available.
+- **Pins belong to boards:** Pinning a thread in /gif/ moves it into the Pinned in /gif/ section, not a global Discover pin list. Unpin returns it to that board's regular catalog. Blocked threads remain hidden locally and can still be unblocked from Discover.
+- **Readable saved groups:** New private downloads preserve the thread subject or opening-post caption and group under that title. Existing downloads without a recorded caption stay grouped by board+thread ID and can be renamed in Saved Media without modifying the actual files.
+- **Bulk delete:** In Saved Media, tap **Select files**, choose individual items, **Select all**, or **Select group** to select one thread/board. Review the selected count and total size, then confirm deletion. Nothing is deleted just by selecting.
+- **Scrolling preserved while selecting** in the Saved Media library. Official signed in-place updates retain the vault.
+
 ## ChanVault v0.5.4 — Yotsuba appearance and offline swipe feed
 
 - **Yotsuba-inspired theme by default:** leafy green, cozy cream, soft borders, and a new original four-leaf-clover + play launcher icon. The icon is an original motif, not character art.
@@ -15,9 +23,9 @@
 
 ## ChanVault v0.5.3 — pin and block threads
 
-- **Pin Thread:** from a thread's **•••** menu or the small **Pin** action in a board catalog. Pins are shown at the top of Discover, with the thread title, board, thumbnail (if available), and a one-tap shortcut.
+- **Pin Thread:** from a thread's **•••** menu or its board catalog card. Pinned threads are shown **only at the top of their own board catalog**, not globally on Discover.
 - **Block Thread:** from the same menu or catalog card (with confirmation). Blocked threads disappear from board catalogs, the Discover board highlights, and Continue Watching; they are removed from pinned threads if previously pinned.
-- **Undo safely:** Discover has **Manage blocked threads** to review and unblock; pinned threads have **Unpin**.
+- **Undo safely:** Discover has **Manage blocked threads** to review and unblock; pinned threads have **Unpin** on their board catalog or thread menu.
 - **Local only:** settings are stored in Android app preferences for this installation. Blocking does not block a user or remove a thread from the internet, and does not delete private downloads. Pinning bookmarks the thread; it does not archive posts or videos, so expired/deleted threads might stop opening.
 
 ## ChanVault v0.5.2 — fixed downloads and spacing
