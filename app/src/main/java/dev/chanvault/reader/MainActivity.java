@@ -593,6 +593,10 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject response = new JSONObject(fetch("https://a.4cdn.org/" + b + "/thread/" + id + ".json"));
                 JSONArray posts = response.getJSONArray("posts");
+                JSONObject firstPost = posts.optJSONObject(0);
+                final String threadCaption = firstPost == null ? "Untitled thread" :
+                        ThreadTitles.select(clean(firstPost.optString("sub", "")),
+                                clean(firstPost.optString("com", "")), id);
                 ui.post(() -> {
                     if (ticket != generation) return;
                     body.removeAllViews();
@@ -612,7 +616,7 @@ public final class MainActivity extends Activity {
                         if (display.length() > 100) display = display.substring(0, 100);
                         String name = display;
                         body.addView(label("Attachment: " + display, 13, MUTED));
-                        Button download = button("Save privately", () -> download(mediaUrl, name, b, id));
+                        Button download = button("Save privately", () -> download(mediaUrl, name, b, id, threadCaption));
                         body.addView(download);
                         body.addView(button("Preview in swipe feed", () -> openFeed(b, id, postId)));
                         body.addView(button("Open original media in browser", () -> {
@@ -632,11 +636,12 @@ public final class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 51);
     }
 
-    private void download(String url, String name, String sourceBoard, long sourceThread) {
+    private void download(String url, String name, String sourceBoard, long sourceThread,
+                          String threadCaption) {
         askNotifications();
         try {
             JSONArray list = new JSONArray();
-            list.put(DownloadService.item(url, name, sourceBoard, sourceThread));
+            list.put(DownloadService.item(url, name, sourceBoard, sourceThread, threadCaption));
             DownloadService.enqueue(this, list);
             toast("Download queued in the background");
         } catch (Exception ex) {
