@@ -840,8 +840,32 @@ public final class ThreadFeedActivity extends Activity {
             FrameLayout loading = loadingOverlay("Loading image...", swipe);
             MediaThumbs.load(image, current.url, true, ok -> {
                 if (serial != viewSerial) return;
-                if (ok) dismissLoading(loading, serial);
-                else showLoadingFailure(loading, "Image preview is unavailable.\nTry again or use Original below.", serial);
+                if (ok) {
+                    dismissLoading(loading, serial);
+                    status.setText("Image ready · " + formatSize(current.size));
+                } else if (current.thumb != null) {
+                    // A thumbnail can remain accessible even if 4chan removed the
+                    // original, or its encoding is unsupported by this device.
+                    // Keep the swipe feed useful rather than displaying a blank page.
+                    status.setText("Original unavailable · Checking thumbnail");
+                    MediaThumbs.load(image, current.thumb, false, thumbOk -> {
+                        if (serial != viewSerial) return;
+                        if (thumbOk) {
+                            dismissLoading(loading, serial);
+                            status.setText("Showing thumbnail · Full image unavailable · Use Original to retry");
+                        } else {
+                            showLoadingFailure(loading,
+                                    "Full image and thumbnail are unavailable.\n"
+                                    + "The file may have expired or the network may be blocking it.",
+                                    serial);
+                            status.setText("Image unavailable · Use Original or Retry preview");
+                        }
+                    });
+                } else {
+                    showLoadingFailure(loading, "Image preview is unavailable.\n"
+                            + "Try again or use Original below.", serial);
+                    status.setText("Image unavailable · Use Original or Retry preview");
+                }
             }, percent -> {
                 if (serial != viewSerial) return;
                 if (bufferingLabel != null && loading.getParent() != null) {
