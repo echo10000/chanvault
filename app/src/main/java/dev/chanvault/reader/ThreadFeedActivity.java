@@ -22,6 +22,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.SeekBar;
+import android.widget.ScrollView;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -61,6 +62,12 @@ public final class ThreadFeedActivity extends Activity {
     private float touchStartX, touchStartY;
     private LinearLayout root;
     private FrameLayout mediaPane;
+    private LinearLayout bottomPanel;
+    private ScrollView detailsScroll;
+    private TextView panelHandle;
+    private boolean panelExpanded = false;
+    private float handleDownY;
+    private boolean handleMoved;
     private android.widget.HorizontalScrollView nextScroller;
     private TextView nextToggle;
     private boolean nextExpanded = false;
@@ -120,6 +127,10 @@ public final class ThreadFeedActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (panelExpanded) {
+            setPanelExpanded(false);
+            return;
+        }
         if (batchRunning) {
             new AlertDialog.Builder(this).setTitle("Leave the feed?")
                     .setMessage("The current download will finish, but the remaining queue will stop.")
@@ -226,10 +237,67 @@ public final class ThreadFeedActivity extends Activity {
         mediaPane.setBackgroundColor(0xff0d1410);
         root.addView(mediaPane, new LinearLayout.LayoutParams(-1, 0, 1));
 
+        // Compact, touchable sheet HANDLE always stays visible.
+        // The actual media surface occupies all remaining space above it.
+        // No control overlays the video or forces it to use a distorted aspect ratio.
+        bottomPanel = new LinearLayout(this);
+        bottomPanel.setOrientation(LinearLayout.VERTICAL);
+        bottomPanel.setBackground(rounded(theme.card, 17, 0));
+
+        panelHandle = text("↑  Swipe up for media controls", 13, PRIMARY);
+        panelHandle.setTypeface(null, android.graphics.Typeface.BOLD);
+        panelHandle.setGravity(Gravity.CENTER);
+        panelHandle.setPadding(dp(14), 0, dp(14), 0);
+        panelHandle.setBackground(rounded(theme.chip, 12, 0));
+        panelHandle.setContentDescription("Open media details. Swipe up to expand or tap.");
+        panelHandle.setOnClickListener(v -> setPanelExpanded(!panelExpanded));
+        panelHandle.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    handleDownY = event.getRawY();
+                    handleMoved = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getRawY() - handleDownY) > dp(14)) handleMoved = true;
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    float dy = event.getRawY() - handleDownY;
+                    if (dy < -dp(40)) setPanelExpanded(true);
+                    else if (dy > dp(40)) setPanelExpanded(false);
+                    else if (!handleMoved) v.performClick();
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    return true;
+                default: return false;
+            }
+        });
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(-1, dp(44));
+        handleLp.leftMargin = dp(13);
+        handleLp.rightMargin = dp(13);
+        handleLp.topMargin = dp(5);
+        handleLp.bottomMargin = dp(5);
+        bottomPanel.addView(panelHandle, handleLp);
+
+        // Keep an actual scroll container within a screen-height cap. This
+        // preserves most of the screen for video, even with the full carousel open.
+        detailsScroll = new ScrollView(this) {
+            @Override protected void onMeasure(int widthSpec, int heightSpec) {
+                int cap = Math.min(dp(390), Math.max(dp(160),
+                        Math.round(getResources().getDisplayMetrics().heightPixels * .43f)));
+                int available = View.MeasureSpec.getSize(heightSpec);
+                int max = available > 0 ? Math.min(available, cap) : cap;
+                super.onMeasure(widthSpec,
+                        View.MeasureSpec.makeMeasureSpec(max, View.MeasureSpec.AT_MOST));
+            }
+        };
+        detailsScroll.setVerticalScrollBarEnabled(false);
+        detailsScroll.setFillViewport(false);
+        detailsScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        detailsScroll.setVisibility(View.GONE);
+
         LinearLayout bottom = new LinearLayout(this);
         bottom.setOrientation(LinearLayout.VERTICAL);
         bottom.setPadding(dp(15), dp(9), dp(15), dp(12));
-        bottom.setBackground(rounded(theme.card, 17, 0));
 
         // A collapsed Up Next bar is shown by default; expanding the filmstrip
         // makes the player a little shorter instead of covering its pixels.
@@ -379,8 +447,36 @@ public final class ThreadFeedActivity extends Activity {
         status.setPadding(0, dp(5), 0, 0);
         bottom.addView(status);
 
-        root.addView(bottom, new LinearLayout.LayoutParams(-1, -2));
+        detailsScroll.addView(bottom, new ScrollView.LayoutParams(-1, -2));
+        bottomPanel.addView(detailsScroll, new LinearLayout.LayoutParams(-1, -2));
+        root.addView(bottomPanel, new LinearLayout.LayoutParams(-1, -2));
+        updatePanelHandle();
         setContentView(root);
+    }
+
+    private void updatePanelHandle() {
+        if (panelHandle == null) return;
+        List<Entry> showing = visible();
+        String place = showing.isEmpty() ? "" :
+                "  ·  " + (Math.min(position + 1, showing.size())) + "/" + showing.size();
+        panelHandle.setText(panelExpanded
+                ? "▾  Swipe down to hide controls" + place
+                : "▴  Swipe up for controls" + place);
+        panelHandle.setContentDescription(panelExpanded
+                ? "Hide details. Swipe down or tap to collapse."
+                : "Show details and media carousel. Swipe up or tap to expand.");
+    }
+
+    private void setPanelExpanded(boolean expand) {
+        if (bottomPanel == null || detailsScroll == null) return;
+        panelExpanded = expand;
+        detailsScroll.setVisibility(expand ? View.VISIBLE : View.GONE);
+        updatePanelHandle();
+        if (expand && nextExpanded)
+            nextScroller.post(this::loadVisibleCarouselImages);
+        // A LinearLayout relayout resizes the PlayerView itself, not its video
+        // aspect ratio or playback state. ExoPlayer continues uninterrupted.
+        mediaPane.requestLayout();
     }
 
     private void setNextExpanded(boolean expand) {
@@ -435,6 +531,7 @@ public final class ThreadFeedActivity extends Activity {
                         found = index;
                     }
                     position = found;
+                    setPanelExpanded(false);
                     showEntry();
                 });
                 carouselImages.add(thumb);
@@ -450,7 +547,7 @@ public final class ThreadFeedActivity extends Activity {
         }
         nextToggle.setText(nextExpanded ? "Browse " + media.size() + " media · Hide  ▴"
                 : "Browse all " + media.size() + " media  ▾");
-        if (nextExpanded) nextScroller.post(() -> {
+        if (nextExpanded && panelExpanded) nextScroller.post(() -> {
             int where = media.indexOf(active);
             if (where >= 0) nextScroller.smoothScrollTo(Math.max(0, where * dp(106) - dp(60)), 0);
             loadVisibleCarouselImages();
@@ -458,7 +555,7 @@ public final class ThreadFeedActivity extends Activity {
     }
 
     private void loadVisibleCarouselImages() {
-        if (!nextExpanded || carouselImages.isEmpty()) return;
+        if (!nextExpanded || !panelExpanded || carouselImages.isEmpty()) return;
         int start = Math.max(0, nextScroller.getScrollX() / dp(106) - 2);
         int end = Math.min(media.size(), start + 11);
         for (int i = start; i < end; i++) {
@@ -584,6 +681,7 @@ public final class ThreadFeedActivity extends Activity {
             return;
         }
         position = next;
+        if (panelExpanded) setPanelExpanded(false);
         showEntry();
     }
 
@@ -735,6 +833,7 @@ public final class ThreadFeedActivity extends Activity {
         bufferingLabel = null;
         mediaPane.removeAllViews();
         List<Entry> list = visible();
+        updatePanelHandle();
         if (list.isEmpty()) {
             heading.setText("No media in this thread");
             caption.setText("Switch to All posts to read the discussion.");
@@ -746,6 +845,7 @@ public final class ThreadFeedActivity extends Activity {
             return;
         }
         position = Math.max(0, Math.min(position, list.size() - 1));
+        updatePanelHandle();
         populateUpNext();
         prepareNextVideo();
         final int serial = viewSerial;
